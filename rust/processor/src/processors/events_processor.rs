@@ -134,6 +134,11 @@ impl ProcessorTrait for EventsProcessor {
                 TxnData::Validator(tx_inner) => &tx_inner.events,
                 _ => &default,
             };
+            let request_default = None;
+            let request =  match txn_data {
+                TxnData::User(tx_inner) => &tx_inner.request,
+                _ => &request_default,
+            };
 
             let txn_events = EventModel::from_events(raw_events, txn_version, block_height);
             let filtered = txn_events
