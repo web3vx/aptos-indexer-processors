@@ -3,7 +3,7 @@
 version: '3.8'
 services:
   processor:
-    image: indexer-processor
+    image: indexer-processor-crawl-echelon
     container_name: processor
     volumes:
       - ./config.yaml:/config.yaml
