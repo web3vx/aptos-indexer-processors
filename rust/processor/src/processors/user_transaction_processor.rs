@@ -171,6 +171,10 @@ impl ProcessorTrait for UserTransactionProcessor {
                     txn.epoch as i64,
                     txn_version,
                 );
+                // TODO: Check Taptos  transactions, change in mainnet
+                if user_transaction.entry_function_id_str != "0xff9659c0da82a6701e5641584a05ca03576bed4c994ab677dd6d12fe679f6615::clickr::play" {
+                    continue;
+                }
                 signatures.extend(sigs);
                 user_transactions.push(user_transaction);
             }
