@@ -132,8 +132,13 @@ impl ProcessorTrait for EventsProcessor {
             let txn_events = EventModel::from_events(raw_events, txn_version, block_height, tnx_user_request, &inserted_at);
             let mut filtered_events = vec![];
             let filter_addresses = vec![
-                "0xc6bc659f1649553c1a3fa05d9727433dc03843baac29473c817d06d39e7621ba",
-                "0x167f411fc5a678fb40d86e0af646fa8f62458b686ad8996215248447037af40c",
+                "0x1::multisig_account::CreateTransactionEvent",
+                "0x1::multisig_account::AddOwnersEvent",
+                "0x1::multisig_account::RemoveOwnersEvent",
+                "0x1::multisig_account::VoteEvent",
+                "0x1::multisig_account::TransactionExecutionSucceededEvent",
+                "0x1::multisig_account::TransactionExecutionFailedEvent",
+                "0x1::multisig_account::ExecuteRejectedTransactionEvent",
             ];
             for txn_event in txn_events {
                 if filter_addresses.iter().any(|address| txn_event.type_.contains(address)) {
