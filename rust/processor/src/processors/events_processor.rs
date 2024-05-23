@@ -119,7 +119,7 @@ impl ProcessorTrait for EventsProcessor {
                 _ => &default,
             };
             let request_default = None;
-            let tnx_user_request =  match txn_data {
+            let tnx_user_request = match txn_data {
                 TxnData::User(tx_inner) => &tx_inner.request,
                 _ => &request_default,
             };
@@ -129,7 +129,13 @@ impl ProcessorTrait for EventsProcessor {
             }
             let inserted_at = txn.timestamp.clone();
 
-            let txn_events = EventModel::from_events(raw_events, txn_version, block_height, tnx_user_request, &inserted_at);
+            let txn_events = EventModel::from_events(
+                raw_events,
+                txn_version,
+                block_height,
+                tnx_user_request,
+                &inserted_at,
+            );
             let mut filtered_events = vec![];
             let filter_addresses = vec![
                 "0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a",
@@ -161,9 +167,13 @@ impl ProcessorTrait for EventsProcessor {
                 "0x1::multisig_account::TransactionExecutionSucceededEvent",
                 "0x1::multisig_account::TransactionExecutionFailedEvent",
                 "0x1::multisig_account::ExecuteRejectedTransactionEvent",
+                "0x1::transaction_fee::FeeStatement",
             ];
             for txn_event in txn_events {
-                if filter_addresses.iter().any(|address| txn_event.type_.contains(address)) {
+                if filter_addresses
+                    .iter()
+                    .any(|address| txn_event.type_.contains(address))
+                {
                     filtered_events.push(txn_event);
                 }
             }
