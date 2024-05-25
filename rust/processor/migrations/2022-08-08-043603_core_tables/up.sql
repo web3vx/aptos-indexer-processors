@@ -118,7 +118,7 @@ CREATE INDEX bmt_insat_index ON block_metadata_transactions (inserted_at);
  "type":"entry_function_payload",
  "function":"0x1::aptos_coin::mint",
  "type_arguments":[
- 
+
  ],
  "arguments":[
  "0x45b44793724a5ecc6ad85fa60949d0824cfc7f61d6bd74490b13598379313142",
@@ -153,24 +153,22 @@ CREATE INDEX bmt_insat_index ON block_metadata_transactions (inserted_at);
  */
 CREATE TABLE user_transactions (
   version BIGINT UNIQUE PRIMARY KEY NOT NULL,
-  block_height BIGINT NOT NULL,
-  parent_signature_type VARCHAR(50) NOT NULL,
+  block_height BIGINT  NULL,
+  parent_signature_type VARCHAR(50)  NULL,
   sender VARCHAR(66) NOT NULL,
-  sequence_number BIGINT NOT NULL,
-  max_gas_amount NUMERIC NOT NULL,
-  expiration_timestamp_secs TIMESTAMP NOT NULL,
-  gas_unit_price NUMERIC NOT NULL,
+  sequence_number BIGINT  NULL,
+  max_gas_amount NUMERIC  NULL,
+  expiration_timestamp_secs TIMESTAMP  NULL,
+  gas_unit_price NUMERIC  NULL,
   -- from UserTransaction
-  "timestamp" TIMESTAMP NOT NULL,
-  entry_function_id_str text NOT NULL,
+  "timestamp" TIMESTAMP  NULL,
+  entry_function_id_str text  NULL,
   -- Default time columns
-  inserted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  inserted_at TIMESTAMP  NULL DEFAULT NOW(),
   -- Constraints
-  CONSTRAINT fk_versions FOREIGN KEY (version) REFERENCES transactions (version),
-  UNIQUE (sender, sequence_number)
+  CONSTRAINT fk_versions FOREIGN KEY (version) REFERENCES transactions (version)
 );
-CREATE INDEX ut_sender_seq_index ON user_transactions (sender, sequence_number);
-CREATE INDEX ut_insat_index ON user_transactions (inserted_at);
+CREATE INDEX ut_sender_seq_index ON user_transactions (sender);
 -- tracks signatures for user transactions
 CREATE TABLE signatures (
   transaction_version BIGINT NOT NULL,
