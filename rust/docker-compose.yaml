@@ -1,10 +1,10 @@
-# docker build . -t indexer-processor
-# docker run -it --network host --mount type=bind,source=/tmp/config.yaml,target=/config.yaml indexer-processor -c /config.yaml
+# docker build . -t indexer-processor-crawl-superposition
+# docker run -it --network host --mount type=bind,source=/tmp/config.yaml,target=/config.yaml indexer-processor-crawl-superposition -c /config.yaml
 version: '3.8'
 services:
   processor-crawl-echelon:
-    image: indexer-processor-crawl-echelon
-    container_name: processor-crawl-echelon
+    image: indexer-processor-crawl-superposition
+    container_name: processor-crawl-superposition
     volumes:
       - ./config.yaml:/config.yaml
     command: -c ./config.yaml
