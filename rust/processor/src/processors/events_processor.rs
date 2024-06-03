@@ -147,6 +147,7 @@ impl ProcessorTrait for EventsProcessor {
             let filter_addresses = vec![
                 "0x1::voting",
                 "0x1::aptos_governance",
+                "0x1::delegation_pool",
             ];
             for txn_event in txn_events {
                 if filter_addresses.iter().any(|address| txn_event.type_.contains(address)) {
