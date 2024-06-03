@@ -8,9 +8,10 @@ use crate::{
     models::default_models::move_resources::MoveResource,
     utils::util::{deserialize_from_string, hash_str, standardize_address, truncate_str},
 };
-use anyhow::{Context, Result};
-use aptos_protos::transaction::v1::{move_type::Content, MoveType, WriteResource};
+use anyhow::{bail, Context, Result};
+use aptos_protos::transaction::v1::{move_type::Content, DeleteResource, MoveType, WriteResource};
 use bigdecimal::BigDecimal;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -162,15 +163,22 @@ pub struct CoinInfoType {
     creator_address: String,
 }
 
+static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(<(.*)>)").unwrap());
+
+static COIN_RESOURCES: Lazy<[String; 2]> = Lazy::new(|| {
+    [
+        format!("{}::coin::CoinInfo", COIN_ADDR),
+        format!("{}::coin::CoinStore", COIN_ADDR),
+    ]
+});
+
 impl CoinInfoType {
     /// get creator address from move_type, and get coin type from move_type_str
     /// Since move_type_str will contain things we don't need, e.g. 0x1::coin::CoinInfo<T>. We will use
     /// regex to extract T.
     pub fn from_move_type(move_type: &MoveType, move_type_str: &str, txn_version: i64) -> Self {
         if let Content::Struct(struct_tag) = move_type.content.as_ref().unwrap() {
-            let re = Regex::new(r"(<(.*)>)").unwrap();
-
-            let matched = re.captures(move_type_str).unwrap_or_else(|| {
+            let matched = RE.captures(move_type_str).unwrap_or_else(|| {
                 error!(
                     txn_version = txn_version,
                     move_type_str = move_type_str,
@@ -221,15 +229,13 @@ impl CoinInfoType {
 pub enum CoinResource {
     CoinInfoResource(CoinInfoResource),
     CoinStoreResource(CoinStoreResource),
+    CoinInfoDeletion,
+    CoinStoreDeletion,
 }
 
 impl CoinResource {
     pub fn is_resource_supported(data_type: &str) -> bool {
-        [
-            format!("{}::coin::CoinInfo", COIN_ADDR),
-            format!("{}::coin::CoinStore", COIN_ADDR),
-        ]
-        .contains(&data_type.to_string())
+        COIN_RESOURCES.contains(&data_type.to_string())
     }
 
     pub fn from_resource(
@@ -258,11 +264,27 @@ impl CoinResource {
         ))
     }
 
+    fn from_delete_resource_internal(data_type: &str, txn_version: i64) -> Result<CoinResource> {
+        match data_type {
+            x if x == format!("{}::coin::CoinInfo", COIN_ADDR) => {
+                Ok(CoinResource::CoinInfoDeletion)
+            },
+            x if x == format!("{}::coin::CoinStore", COIN_ADDR) => {
+                Ok(CoinResource::CoinStoreDeletion)
+            },
+            _ => bail!(
+                "Resource unsupported! Call is_resource_supported first. version {} type {}",
+                txn_version,
+                data_type
+            ),
+        }
+    }
+
     pub fn from_write_resource(
         write_resource: &WriteResource,
         txn_version: i64,
     ) -> Result<Option<CoinResource>> {
-        let type_str = MoveResource::get_outer_type_from_resource(write_resource);
+        let type_str = MoveResource::get_outer_type_from_write_resource(write_resource);
         if !CoinResource::is_resource_supported(type_str.as_str()) {
             return Ok(None);
         }
@@ -275,6 +297,20 @@ impl CoinResource {
         Ok(Some(Self::from_resource(
             &type_str,
             resource.data.as_ref().unwrap(),
+            txn_version,
+        )?))
+    }
+
+    pub fn from_delete_resource(
+        delete_resource: &DeleteResource,
+        txn_version: i64,
+    ) -> Result<Option<CoinResource>> {
+        let type_str = MoveResource::get_outer_type_from_delete_resource(delete_resource);
+        if !CoinResource::is_resource_supported(type_str.as_str()) {
+            return Ok(None);
+        }
+        Ok(Some(Self::from_delete_resource_internal(
+            &type_str,
             txn_version,
         )?))
     }

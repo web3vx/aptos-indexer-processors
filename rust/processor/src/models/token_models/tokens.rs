@@ -73,6 +73,8 @@ impl Token {
         transaction: &Transaction,
         table_handle_to_owner: &TableHandleToOwner,
         conn: &mut PgPoolConnection<'_>,
+        query_retries: u32,
+        query_retry_delay_ms: u64,
     ) -> (
         Vec<Self>,
         Vec<TokenOwnership>,
@@ -156,6 +158,8 @@ impl Token {
                                 txn_timestamp,
                                 table_handle_to_owner,
                                 conn,
+                                query_retries,
+                                query_retry_delay_ms,
                             )
                             .await
                             .unwrap(),
@@ -415,7 +419,7 @@ impl TableMetadataForToken {
         write_resource: &WriteResource,
         txn_version: i64,
     ) -> anyhow::Result<Option<TableHandleToOwner>> {
-        let type_str = MoveResource::get_outer_type_from_resource(write_resource);
+        let type_str = MoveResource::get_outer_type_from_write_resource(write_resource);
         if !TokenResource::is_resource_supported(type_str.as_str()) {
             return Ok(None);
         }

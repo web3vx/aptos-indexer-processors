@@ -14,6 +14,7 @@ use crate::{
 use anyhow::{Context, Result};
 use aptos_protos::transaction::v1::WriteResource;
 use bigdecimal::BigDecimal;
+use field_count::FieldCount;
 use serde::{Deserialize, Serialize};
 
 const FUNGIBLE_ASSET_LENGTH: usize = 32;
@@ -44,7 +45,7 @@ impl FeeStatement {
 }
 
 /* Section on fungible assets resources */
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, FieldCount)]
 pub struct FungibleAssetMetadata {
     name: String,
     symbol: String,
@@ -58,7 +59,7 @@ impl FungibleAssetMetadata {
         write_resource: &WriteResource,
         txn_version: i64,
     ) -> anyhow::Result<Option<Self>> {
-        let type_str = MoveResource::get_outer_type_from_resource(write_resource);
+        let type_str = MoveResource::get_outer_type_from_write_resource(write_resource);
         if !V2FungibleAssetResource::is_resource_supported(type_str.as_str()) {
             return Ok(None);
         }
@@ -112,7 +113,7 @@ impl FungibleAssetStore {
         write_resource: &WriteResource,
         txn_version: i64,
     ) -> anyhow::Result<Option<Self>> {
-        let type_str = MoveResource::get_outer_type_from_resource(write_resource);
+        let type_str = MoveResource::get_outer_type_from_write_resource(write_resource);
         if !V2FungibleAssetResource::is_resource_supported(type_str.as_str()) {
             return Ok(None);
         }
@@ -157,7 +158,7 @@ impl FungibleAssetSupply {
         write_resource: &WriteResource,
         txn_version: i64,
     ) -> anyhow::Result<Option<Self>> {
-        let type_str: String = MoveResource::get_outer_type_from_resource(write_resource);
+        let type_str: String = MoveResource::get_outer_type_from_write_resource(write_resource);
         if !V2FungibleAssetResource::is_resource_supported(type_str.as_str()) {
             return Ok(None);
         }
