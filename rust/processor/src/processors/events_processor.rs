@@ -13,7 +13,11 @@ use crate::{
 };
 use ahash::AHashMap;
 use anyhow::bail;
-use aptos_protos::transaction::v1::{transaction::TxnData, Transaction};
+use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::{
+    transaction::TxnData, Event, EventKey, Transaction, WriteSetChange,
+};
+use aptos_protos::util::timestamp::Timestamp;
 use async_trait::async_trait;
 use diesel::{
     pg::{upsert::excluded, Pg},
@@ -126,6 +130,7 @@ impl ProcessorTrait for EventsProcessor {
                     continue;
                 },
             };
+
             let default = vec![];
             let raw_events = match txn_data {
                 TxnData::BlockMetadata(tx_inner) => &tx_inner.events,
