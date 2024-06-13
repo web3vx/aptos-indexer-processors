@@ -712,17 +712,21 @@ diesel::table! {
         transaction_block_height -> Int8,
         #[sql_name = "type"]
         type_ -> Text,
+        #[max_length = 100]
+        from -> Nullable<Varchar>,
+        entry_function_id_str -> Nullable<Varchar>,
+        entry_function_payload -> Nullable<Jsonb>,
+        #[max_length = 300]
+        module_address -> Nullable<Varchar>,
+        #[max_length = 300]
+        module_name -> Nullable<Varchar>,
+        #[max_length = 300]
+        event_name -> Nullable<Varchar>,
         data -> Jsonb,
         inserted_at -> Timestamp,
         event_index -> Int8,
         #[max_length = 600]
         indexed_type -> Varchar,
-        from -> Varchar,
-        entry_function_id_str -> Varchar,
-        entry_function_payload -> Jsonb,
-        module_address -> Varchar,
-        module_name -> Varchar,
-        event_name -> Varchar,
     }
 }
 
@@ -857,6 +861,52 @@ diesel::table! {
 }
 
 diesel::table! {
+    multisig_owners (owner_address) {
+        #[max_length = 255]
+        owner_address -> Varchar,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    multisig_transactions (transaction_id) {
+        #[max_length = 255]
+        transaction_id -> Varchar,
+        #[max_length = 255]
+        wallet_address -> Varchar,
+        #[max_length = 255]
+        initiated_by -> Varchar,
+        sequence_number -> Int8,
+        payload -> Jsonb,
+        status -> Int4,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    multisig_voting_transactions (id) {
+        id -> Int4,
+        #[max_length = 255]
+        wallet_address -> Varchar,
+        #[max_length = 255]
+        owner_address -> Varchar,
+        transaction_sequence -> Int8,
+        value -> Bool,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    multisig_wallets (wallet_address) {
+        #[max_length = 255]
+        wallet_address -> Varchar,
+        required_signatures -> Int4,
+        metadata -> Nullable<Jsonb>,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     nft_points (transaction_version) {
         transaction_version -> Int8,
         #[max_length = 66]
@@ -883,6 +933,16 @@ diesel::table! {
         allow_ungated_transfer -> Bool,
         is_deleted -> Bool,
         inserted_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    owners_wallets (owner_address, wallet_address) {
+        #[max_length = 255]
+        owner_address -> Varchar,
+        #[max_length = 255]
+        wallet_address -> Varchar,
+        created_at -> Nullable<Timestamp>,
     }
 }
 
@@ -1239,6 +1299,13 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(multisig_transactions -> multisig_owners (initiated_by));
+diesel::joinable!(multisig_transactions -> multisig_wallets (wallet_address));
+diesel::joinable!(multisig_voting_transactions -> multisig_owners (owner_address));
+diesel::joinable!(multisig_voting_transactions -> multisig_wallets (wallet_address));
+diesel::joinable!(owners_wallets -> multisig_owners (owner_address));
+diesel::joinable!(owners_wallets -> multisig_wallets (wallet_address));
+
 diesel::allow_tables_to_appear_in_same_query!(
     account_transactions,
     ans_lookup,
@@ -1285,8 +1352,13 @@ diesel::allow_tables_to_appear_in_same_query!(
     ledger_infos,
     move_modules,
     move_resources,
+    multisig_owners,
+    multisig_transactions,
+    multisig_voting_transactions,
+    multisig_wallets,
     nft_points,
     objects,
+    owners_wallets,
     processor_status,
     proposal_votes,
     signatures,

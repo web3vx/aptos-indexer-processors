@@ -452,6 +452,27 @@ pub fn is_multisig_wallet_created_transaction(txn_event: &Event) -> bool {
     name_str == "create_with_owners"
 }
 
+pub fn extract_multisig_wallet_data_from_write_resource(
+    write_resource: &str,
+) -> (i64, Value, Vec<String>) {
+    let json_data: Value = serde_json::from_str(write_resource).unwrap();
+    let required_signatures = json_data["num_signatures_required"]
+        .as_str()
+        .unwrap_or_else(|| "0")
+        .parse::<i64>()
+        .unwrap_or_else(|_| 0);
+    let metadata = json_data["metadata"].clone();
+
+    let owners = match json_data["owners"].as_array() {
+        Some(val) => val
+            .iter()
+            .map(|owner| owner.as_str().unwrap_or_else(|| "").to_string())
+            .collect::<Vec<String>>(),
+        None => vec![],
+    };
+
+    (required_signatures, metadata, owners)
+}
 /* COMMON STRUCTS */
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AggregatorU64 {
