@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::custom_processor::CustomProcessorConfig;
 use crate::{
     gap_detector::DEFAULT_GAP_DETECTION_BATCH_SIZE, processors::ProcessorConfig,
     transaction_filter::TransactionFilter, worker::Worker,
@@ -19,6 +20,7 @@ pub const QUERY_DEFAULT_RETRY_DELAY_MS: u64 = 500;
 #[serde(deny_unknown_fields)]
 pub struct IndexerGrpcProcessorConfig {
     pub processor_config: ProcessorConfig,
+    pub custom_processor_config: CustomProcessorConfig,
     pub postgres_connection_string: String,
     // TODO: Add TLS support.
     pub indexer_grpc_data_service_address: Url,
@@ -81,6 +83,7 @@ impl RunnableConfig for IndexerGrpcProcessorConfig {
     async fn run(&self) -> Result<()> {
         let mut worker = Worker::new(
             self.processor_config.clone(),
+            self.custom_processor_config.clone(),
             self.postgres_connection_string.clone(),
             self.indexer_grpc_data_service_address.clone(),
             self.grpc_http2_config.clone(),

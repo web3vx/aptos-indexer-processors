@@ -3,6 +3,10 @@
 
 use crate::{
     config::IndexerGrpcHttp2Config,
+    custom_processor::{
+        multisig_processor::MultisigProcessor, CustomProcessor, CustomProcessorConfig,
+        CustomProcessorTrait,
+    },
     grpc_stream::TransactionsPBResponse,
     models::{ledger_info::LedgerInfo, processor_status::ProcessorStatusQuery},
     processors::{
@@ -48,6 +52,7 @@ pub const PROCESSOR_SERVICE_TYPE: &str = "processor";
 pub struct Worker {
     pub db_pool: PgDbPool,
     pub processor_config: ProcessorConfig,
+    pub custom_processor_config: CustomProcessorConfig,
     pub postgres_connection_string: String,
     pub indexer_grpc_data_service_address: Url,
     pub grpc_http2_config: IndexerGrpcHttp2Config,
@@ -68,6 +73,7 @@ impl Worker {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         processor_config: ProcessorConfig,
+        custom_processor_config: CustomProcessorConfig,
         postgres_connection_string: String,
         indexer_grpc_data_service_address: Url,
         grpc_http2_config: IndexerGrpcHttp2Config,
@@ -85,8 +91,12 @@ impl Worker {
         grpc_response_item_timeout_in_secs: u64,
     ) -> Result<Self> {
         let processor_name = processor_config.name();
+        let custom_processor_name = custom_processor_config.name();
         info!(processor_name = processor_name, "[Parser] Kicking off");
-
+        info!(
+            custom_processor_name = custom_processor_name,
+            "[Parser] Custom processor Kicking off"
+        );
         info!(
             processor_name = processor_name,
             service_type = PROCESSOR_SERVICE_TYPE,
@@ -104,6 +114,7 @@ impl Worker {
         Ok(Self {
             db_pool: conn_pool,
             processor_config,
+            custom_processor_config,
             postgres_connection_string,
             indexer_grpc_data_service_address,
             grpc_http2_config,
@@ -305,6 +316,12 @@ impl Worker {
             self.db_pool.clone(),
         );
 
+        let custom_processor = build_custom_processor(
+            &self.custom_processor_config,
+            self.per_table_chunk_sizes.clone(),
+            self.db_pool.clone(),
+        );
+
         let concurrent_tasks = self.number_concurrent_processing_tasks;
 
         let chain_id = self
@@ -400,6 +417,7 @@ impl Worker {
                         let res = do_processor(
                             transactions_pb,
                             &processor,
+                            &custom_processor,
                             chain_id,
                             processor_name,
                             &auth_token,
@@ -650,6 +668,7 @@ async fn fetch_transactions(
 pub async fn do_processor(
     transactions_pb: TransactionsPBResponse,
     processor: &Processor,
+    custom_processor: &CustomProcessor,
     db_chain_id: u64,
     processor_name: &str,
     auth_token: &str,
@@ -691,10 +710,18 @@ pub async fn do_processor(
             "[Parser] Started processing one batch of transactions"
         );
     }
-
+    let cloned_transactions = transactions_pb.transactions.clone();
     let processed_result = processor
         .process_transactions(
             transactions_pb.transactions,
+            start_version,
+            end_version,
+            Some(db_chain_id),
+        )
+        .await;
+    let _ = custom_processor
+        .process_transactions(
+            cloned_transactions,
             start_version,
             end_version,
             Some(db_chain_id),
@@ -771,5 +798,17 @@ pub fn build_processor(
         ProcessorConfig::UserTransactionProcessor => Processor::from(
             UserTransactionProcessor::new(db_pool, per_table_chunk_sizes),
         ),
+    }
+}
+
+pub fn build_custom_processor(
+    config: &CustomProcessorConfig,
+    per_table_chunk_sizes: AHashMap<String, usize>,
+    db_pool: PgDbPool,
+) -> CustomProcessor {
+    match config {
+        CustomProcessorConfig::MultisigProcessor => {
+            CustomProcessor::from(MultisigProcessor::new(db_pool, per_table_chunk_sizes))
+        },
     }
 }

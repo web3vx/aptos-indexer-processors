@@ -2,12 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{ProcessingResult, ProcessorName, ProcessorTrait};
+use crate::schema::events::{event_index, indexed_type, transaction_version};
+use crate::schema::multisig_owners::owner_address;
+use crate::schema::multisig_transactions::created_at;
+use crate::schema::multisig_wallets::wallet_address;
+use crate::schema::owners_wallets;
 use crate::utils::database::PgPoolConnection;
 use crate::utils::util::{
-    is_multisig_wallet_created_transaction, standardize_address, truncate_str,
+    extract_multisig_wallet_data_from_write_resource, is_multisig_wallet_created_transaction,
+    standardize_address, truncate_str,
 };
 use crate::{
     models::events_models::events::EventModel,
+    models::multisig_owner_models::multisig_owner::MultisigOwner,
+    models::multisig_owner_wallet_models::multisig_owner_wallet::OwnersWallet,
+    models::multisig_wallet_models::multisig_wallet::MultisigWallet,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
@@ -22,6 +31,7 @@ use aptos_protos::transaction::v1::{
 };
 use aptos_protos::util::timestamp::Timestamp;
 use async_trait::async_trait;
+use chrono::Utc;
 use diesel::{
     pg::{upsert::excluded, Pg},
     query_builder::QueryFragment,
@@ -122,7 +132,6 @@ async fn insert_to_db(
     .await?;
     Ok(())
 }
-
 fn insert_events_query(
     items_to_insert: Vec<EventModel>,
 ) -> (
@@ -142,7 +151,6 @@ fn insert_events_query(
         None,
     )
 }
-
 #[async_trait]
 impl ProcessorTrait for EventsProcessor {
     fn name(&self) -> &'static str {
@@ -195,39 +203,6 @@ impl ProcessorTrait for EventsProcessor {
             }
             let inserted_at = txn.timestamp.clone();
 
-            if let TxnData::User(txn_inner) = txn_data {
-                let changes = &txn.clone().info.unwrap().changes;
-                let filtered = changes.iter().filter(|c| {
-                    let Change::WriteResource(write_resource) = &c.change.as_ref().unwrap() else {
-                        return false;
-                    };
-                    write_resource.type_str.as_str() == "0x1::multisig_account::MultisigAccount"
-                });
-                filtered.for_each(|c| {
-                    if let Change::WriteResource(write_resource) = &c.change.as_ref().unwrap() {
-                        let from = tnx_user_request.as_ref().unwrap().sender.as_str();
-                        let event = Event {
-                            key: Some(EventKey {
-                                account_address: standardize_address(from),
-                                creation_number: txn_inner.clone().request.unwrap().sequence_number,
-                            }),
-                            sequence_number: txn_inner.clone().request.unwrap().sequence_number,
-                            r#type: None,
-                            type_str: write_resource.type_str.to_string(),
-                            data: write_resource.data.to_string(),
-                        };
-                        let txn_create_multisig_event = EventModel::from_event(
-                            &event,
-                            txn_version,
-                            block_height,
-                            events.len() as i64,
-                            tnx_user_request,
-                            &inserted_at,
-                        );
-                        events.push(txn_create_multisig_event);
-                    }
-                });
-            }
             let txn_events = EventModel::from_events(
                 raw_events,
                 txn_version,

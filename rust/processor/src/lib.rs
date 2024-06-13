@@ -18,6 +18,9 @@ pub mod gap_detector;
 pub mod grpc_stream;
 pub mod models;
 pub mod processors;
+
+pub mod custom_processor;
+
 pub mod schema;
 pub mod transaction_filter;
 pub mod utils;
