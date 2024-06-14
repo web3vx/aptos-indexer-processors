@@ -1,48 +1,32 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ProcessingResult, ProcessorName, ProcessorTrait};
-use crate::schema::events::{event_index, indexed_type, transaction_version};
-use crate::schema::multisig_owners::owner_address;
-use crate::schema::multisig_transactions::created_at;
-use crate::schema::multisig_wallets::wallet_address;
-use crate::schema::owners_wallets;
-use crate::utils::database::PgPoolConnection;
-use crate::utils::util::{
-    extract_multisig_wallet_data_from_write_resource, is_multisig_wallet_created_transaction,
-    standardize_address, truncate_str,
+use std::fmt::Debug;
+
+use ahash::AHashMap;
+use anyhow::bail;
+use aptos_protos::transaction::v1::{
+    Transaction, transaction::TxnData,
 };
+use async_trait::async_trait;
+use diesel::{
+    ExpressionMethods,
+    pg::{Pg, upsert::excluded},
+    query_builder::QueryFragment,
+};
+use once_cell::sync::Lazy;
+use tracing::error;
+
 use crate::{
     models::events_models::events::EventModel,
-    models::multisig_owner_models::multisig_owner::MultisigOwner,
-    models::multisig_owner_wallet_models::multisig_owner_wallet::OwnersWallet,
-    models::multisig_wallet_models::multisig_wallet::MultisigWallet,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
         database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
     },
 };
-use ahash::AHashMap;
-use anyhow::bail;
-use aptos_protos::transaction::v1::write_set_change::Change;
-use aptos_protos::transaction::v1::{
-    transaction::TxnData, Event, EventKey, Transaction, WriteSetChange,
-};
-use aptos_protos::util::timestamp::Timestamp;
-use async_trait::async_trait;
-use chrono::Utc;
-use diesel::{
-    pg::{upsert::excluded, Pg},
-    query_builder::QueryFragment,
-    ExpressionMethods,
-};
-use once_cell::sync::Lazy;
-use std::fmt::Debug;
-use std::future::Future;
-use std::pin::Pin;
-use tracing::error;
-use tracing::log::info;
+
+use super::{ProcessingResult, ProcessorName, ProcessorTrait};
 
 static FILTERED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
@@ -84,6 +68,7 @@ static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
         "0xccd1a84ccea93531d7f165b90134aa0415feb30e8757ab1632dac68c0055f5c2",
     ]
 });
+
 pub struct EventsProcessor {
     connection_pool: PgDbPool,
     per_table_chunk_sizes: AHashMap<String, usize>,
@@ -128,10 +113,10 @@ async fn insert_to_db(
         insert_events_query,
         events,
         get_config_table_chunk_size::<EventModel>("events", per_table_chunk_sizes),
-    )
-    .await?;
+    ).await?;
     Ok(())
 }
+
 fn insert_events_query(
     items_to_insert: Vec<EventModel>,
 ) -> (
@@ -140,17 +125,14 @@ fn insert_events_query(
 ) {
     use schema::events::dsl::*;
     (
-        diesel::insert_into(schema::events::table)
-            .values(items_to_insert)
-            .on_conflict((transaction_version, event_index))
-            .do_update()
-            .set((
-                inserted_at.eq(excluded(inserted_at)),
-                indexed_type.eq(excluded(indexed_type)),
-            )),
+        diesel::insert_into(schema::events::table).values(items_to_insert).on_conflict((transaction_version, event_index)).do_update().set((
+            inserted_at.eq(excluded(inserted_at)),
+            indexed_type.eq(excluded(indexed_type)),
+        )),
         None,
     )
 }
+
 #[async_trait]
 impl ProcessorTrait for EventsProcessor {
     fn name(&self) -> &'static str {
@@ -178,11 +160,9 @@ impl ProcessorTrait for EventsProcessor {
                         transaction_version = txn_version,
                         "Transaction data doesn't exist"
                     );
-                    PROCESSOR_UNKNOWN_TYPE_COUNT
-                        .with_label_values(&["EventsProcessor"])
-                        .inc();
+                    PROCESSOR_UNKNOWN_TYPE_COUNT.with_label_values(&["EventsProcessor"]).inc();
                     continue;
-                },
+                }
             };
 
             let default = vec![];
@@ -211,9 +191,7 @@ impl ProcessorTrait for EventsProcessor {
                 &inserted_at,
             );
             for txn_event in txn_events {
-                if (!FILTERED_EVENTS.contains(&txn_event.type_.as_str())
-                    || REQUIRED_EVENTS.contains(&txn_event.type_.as_str()))
-                    && !FILTERED_EVENTS.contains(&txn_event.entry_function_id_str.as_str())
+                if (!FILTERED_EVENTS.contains(&txn_event.type_.as_str()) || REQUIRED_EVENTS.contains(&txn_event.type_.as_str())) && !FILTERED_EVENTS.contains(&txn_event.entry_function_id_str.as_str())
                 {
                     events.push(txn_event);
                 }
@@ -230,8 +208,7 @@ impl ProcessorTrait for EventsProcessor {
             end_version,
             &events,
             &self.per_table_chunk_sizes,
-        )
-        .await;
+        ).await;
 
         let db_insertion_duration_in_secs = db_insertion_start.elapsed().as_secs_f64();
         match tx_result {
@@ -251,7 +228,7 @@ impl ProcessorTrait for EventsProcessor {
                     "[Parser] Error inserting transactions to db",
                 );
                 bail!(e)
-            },
+            }
         }
     }
 

@@ -1,10 +1,9 @@
-use crate::schema::multisig_transactions;
-use crate::utils::database::PgDbPool;
 use chrono::NaiveDateTime;
-use diesel_async::RunQueryDsl;
 use field_count::FieldCount;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::schema::multisig_transactions;
 
 pub enum TransactionStatus {
     Pending = 1,
@@ -12,15 +11,16 @@ pub enum TransactionStatus {
     Success = 3,
     Failed = 4,
 }
-#[derive(Clone, Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
+
+#[derive(Clone, Debug, Deserialize, FieldCount, Identifiable, Queryable, Insertable, Serialize, AsChangeset)]
 #[diesel(table_name = multisig_transactions)]
-#[diesel(primary_key(transaction_id))]
+#[diesel(primary_key(wallet_address, sequence_number))]
 pub struct MultisigTransaction {
-    pub transaction_id: String,
     pub wallet_address: String,
     pub initiated_by: String,
-    pub sequence_number: i64,
+    pub sequence_number: i32,
     pub payload: Value,
+    pub payload_hash: Option<Value>,
     pub status: i32,
     pub created_at: NaiveDateTime,
 }

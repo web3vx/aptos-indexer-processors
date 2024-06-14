@@ -3,18 +3,20 @@
 
 #![allow(clippy::extra_unused_lifetimes)]
 
-use crate::{
-    schema::events,
-    utils::util::{standardize_address, truncate_str},
-};
 use aptos_protos::transaction::v1::{Event as EventPB, UserTransactionRequest};
 use aptos_protos::util::timestamp::Timestamp;
 use chrono::NaiveDateTime;
 use field_count::FieldCount;
 use serde::{Deserialize, Serialize};
 
-// p99 currently is 303 so using 300 as a safe max length
+use crate::{
+    schema::events,
+    utils::util::{standardize_address, truncate_str},
+};
+
 const EVENT_TYPE_MAX_LENGTH: usize = 600;
+
+// p99 currently is 303 so using 300 as a safe max length const EVENT_TYPE_MAX_LENGTH: usize = 600;
 
 #[derive(Clone, Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
 #[diesel(primary_key(transaction_version, event_index))]
@@ -37,17 +39,19 @@ pub struct Event {
     pub event_name: String,
     pub inserted_at: chrono::NaiveDateTime,
 }
+
 fn timestamp_to_naive(t: &Option<Timestamp>) -> NaiveDateTime {
     match t {
         Some(timestamp) => {
             let seconds = timestamp.seconds;
             let nanos = timestamp.nanos; // this is in billionths of a second
-            let naive = NaiveDateTime::from_timestamp(seconds, nanos as u32);
-            naive
-        },
-        None => NaiveDateTime::from_timestamp(0, 0), // or any other default value
+            let naive = NaiveDateTime::from_timestamp_opt(seconds, nanos as u32);
+            naive.unwrap()
+        }
+        None => NaiveDateTime::from_timestamp_opt(0, 0).unwrap(), // or any other default value
     }
 }
+
 impl Event {
     pub fn from_event(
         event: &EventPB,
@@ -71,13 +75,13 @@ impl Event {
             let entry_function_payload_json = match request_data.unwrap().payload.as_ref().unwrap() {
                 aptos_protos::transaction::v1::transaction_payload::Payload::EntryFunctionPayload(entry_function_payload) => {
                     serde_json::to_value(entry_function_payload).ok()
-                },
+                }
                 _ => None,
             };
             let entry_function_id_str = match request_data.unwrap().payload.as_ref().unwrap() {
                 aptos_protos::transaction::v1::transaction_payload::Payload::EntryFunctionPayload(entry_function_payload) => {
                     entry_function_payload.entry_function_id_str.to_string()
-                },
+                }
                 _ => "".to_string(),
             };
             let from = request.as_ref().unwrap().sender.as_str();
@@ -133,20 +137,16 @@ impl Event {
         request: &Option<UserTransactionRequest>,
         inserted_at: &Option<Timestamp>,
     ) -> Vec<Self> {
-        events
-            .iter()
-            .enumerate()
-            .map(|(index, event)| {
-                Self::from_event(
-                    event,
-                    transaction_version,
-                    transaction_block_height,
-                    index as i64,
-                    request,
-                    inserted_at,
-                )
-            })
-            .collect::<Vec<EventModel>>()
+        events.iter().enumerate().map(|(index, event)| {
+            Self::from_event(
+                event,
+                transaction_version,
+                transaction_block_height,
+                index as i64,
+                request,
+                inserted_at,
+            )
+        }).collect::<Vec<EventModel>>()
     }
 }
 

@@ -869,28 +869,26 @@ diesel::table! {
 }
 
 diesel::table! {
-    multisig_transactions (transaction_id) {
-        #[max_length = 255]
-        transaction_id -> Varchar,
+    multisig_transactions (wallet_address, sequence_number) {
         #[max_length = 255]
         wallet_address -> Varchar,
         #[max_length = 255]
         initiated_by -> Varchar,
-        sequence_number -> Int8,
+        sequence_number -> Int4,
         payload -> Jsonb,
+        payload_hash -> Nullable<Jsonb>,
         status -> Int4,
         created_at -> Nullable<Timestamp>,
     }
 }
 
 diesel::table! {
-    multisig_voting_transactions (id) {
-        id -> Int4,
+    multisig_voting_transactions (transaction_sequence, wallet_address, owner_address, value) {
         #[max_length = 255]
         wallet_address -> Varchar,
         #[max_length = 255]
         owner_address -> Varchar,
-        transaction_sequence -> Int8,
+        transaction_sequence -> Int4,
         value -> Bool,
         created_at -> Nullable<Timestamp>,
     }
