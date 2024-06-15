@@ -160,7 +160,6 @@ fn insert_multisig_wallet_query(
     use schema::multisig_wallets::dsl::*;
     (
         diesel::insert_into(schema::multisig_wallets::table).values(multisig_wallet).on_conflict(wallet_address).do_update().set((
-            metadata.eq(excluded(metadata)),
             required_signatures.eq(excluded(required_signatures)),
             created_at.eq(excluded(created_at)),
         )),
