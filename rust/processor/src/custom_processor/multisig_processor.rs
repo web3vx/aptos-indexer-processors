@@ -218,7 +218,7 @@ fn insert_multisig_voting_transaction_query(
 ) {
     use schema::multisig_voting_transactions::dsl::*;
     (
-        diesel::insert_into(schema::multisig_voting_transactions::table).values(votes).on_conflict((transaction_sequence, wallet_address, owner_address, value)).do_update().set((
+        diesel::insert_into(schema::multisig_voting_transactions::table).values(votes).on_conflict((transaction_sequence, wallet_address, value)).do_update().set((
             created_at.eq(excluded(created_at)),
         )),
         None,
@@ -342,7 +342,6 @@ async fn handle_vote_event(processor: &MultisigProcessor, event: &Event) -> anyh
     let multisig_vote = MultisigVotingTransaction {
         wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
         transaction_sequence: event_data["sequence_number"].as_str().unwrap_or("0").parse::<i32>()?,
-        owner_address: event_data["owner"].as_str().unwrap().to_string(),
         value: event_data["approved"].as_bool().unwrap(),
         created_at: Utc::now().naive_utc(),
     };
@@ -406,7 +405,6 @@ async fn handle_create_transaction_event(
                 event.key.as_ref().unwrap().account_address.as_str(),
             ),
             transaction_sequence: event_data["sequence_number"].as_str().unwrap_or("0").parse::<i32>()?,
-            owner_address: standardize_address(first_vote["key"].as_str().unwrap()),
             value: first_vote["value"].as_bool().unwrap(),
             created_at: Utc::now().naive_utc(),
         };
