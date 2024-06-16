@@ -4,5 +4,3 @@ CREATE TABLE multisig_wallets (
     metadata JSONB,
     created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() AT TIME ZONE 'utc')
 );
-
-CREATE INDEX created_at_index ON multisig_wallets (created_at);

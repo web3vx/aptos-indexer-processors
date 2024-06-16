@@ -883,7 +883,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    multisig_voting_transactions (transaction_sequence, wallet_address, value) {
+    multisig_voting_transactions (transaction_sequence, wallet_address, voter_address, value) {
+        #[max_length = 255]
+        voter_address -> Varchar,
         #[max_length = 255]
         wallet_address -> Varchar,
         transaction_sequence -> Int4,
@@ -1297,6 +1299,7 @@ diesel::table! {
 
 diesel::joinable!(multisig_transactions -> multisig_owners (initiated_by));
 diesel::joinable!(multisig_transactions -> multisig_wallets (wallet_address));
+diesel::joinable!(multisig_voting_transactions -> multisig_owners (voter_address));
 diesel::joinable!(owners_wallets -> multisig_owners (owner_address));
 diesel::joinable!(owners_wallets -> multisig_wallets (wallet_address));
 

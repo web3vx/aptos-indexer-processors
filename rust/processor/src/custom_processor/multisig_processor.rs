@@ -4,13 +4,19 @@
 use std::fmt::Debug;
 
 use ahash::AHashMap;
-use aptos_protos::transaction::v1::{Event, Transaction, transaction::TxnData, WriteResource};
+use aptos_protos::transaction::v1::{EntryFunctionPayload, Event, MultisigPayload, Transaction, transaction::TxnData, WriteResource};
+use aptos_protos::transaction::v1::multisig_transaction_payload::Payload;
 use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_system_utils::
 use async_trait::async_trait;
+use bcs::from_bytes;
 use chrono::Utc;
 use diesel::{BoolExpressionMethods, ExpressionMethods, pg::{Pg, upsert::excluded}, query_builder::QueryFragment, RunQueryDsl};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::log::info;
+
+
 
 use crate::{
     models::multisig_owner_models::multisig_owner::MultisigOwner,
@@ -218,7 +224,7 @@ fn insert_multisig_voting_transaction_query(
 ) {
     use schema::multisig_voting_transactions::dsl::*;
     (
-        diesel::insert_into(schema::multisig_voting_transactions::table).values(votes).on_conflict((transaction_sequence, wallet_address, value)).do_update().set((
+        diesel::insert_into(schema::multisig_voting_transactions::table).values(votes).on_conflict((transaction_sequence, wallet_address, voter_address, value)).do_update().set((
             created_at.eq(excluded(created_at)),
         )),
         None,
@@ -342,6 +348,7 @@ async fn handle_vote_event(processor: &MultisigProcessor, event: &Event) -> anyh
     let multisig_vote = MultisigVotingTransaction {
         wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
         transaction_sequence: event_data["sequence_number"].as_str().unwrap_or("0").parse::<i32>()?,
+        voter_address: event_data["owner"].as_str().unwrap().to_string(),
         value: event_data["approved"].as_bool().unwrap(),
         created_at: Utc::now().naive_utc(),
     };
@@ -392,6 +399,13 @@ async fn handle_create_transaction_event(
         status: 0,
     };
 
+    let payload_vec = event_data["transaction"]["payload"]["vec"].as_array().unwrap();
+    let payload_str = payload_vec.get(0).unwrap().as_str().unwrap();
+    // let decoded = hex::decode(payload_str.strip_prefix("0x").unwrap_or(&*payload_str)).ok();
+    let decoded = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 13, 97, 112, 116, 111, 115, 95, 97, 99, 99, 111, 117, 110, 116, 8, 116, 114, 97, 110, 115, 102, 101, 114, 0, 2, 32, 52, 191, 126, 45, 23, 103, 79, 235, 35, 67, 113, 167, 234, 88, 239, 215, 21, 240, 229, 107, 162, 14, 191, 19, 120, 148, 128, 217, 214, 67, 175, 175, 8, 232, 3, 0, 0, 0, 0, 0, 0];
+    eprintln!("Payload string {:?}",decoded);
+    let payload_parsed  = from_bytes::<MultisigTransactionPayload>(&decoded).unwrap();
+    eprintln!("Payload parsed {:?}",payload_parsed);
     insert_to_transaction_db(
         &processor.get_pool(),
         &[multisig_transaction],
@@ -404,6 +418,7 @@ async fn handle_create_transaction_event(
             wallet_address: standardize_address(
                 event.key.as_ref().unwrap().account_address.as_str(),
             ),
+            voter_address: standardize_address(first_vote["key"].as_str().unwrap()),
             transaction_sequence: event_data["sequence_number"].as_str().unwrap_or("0").parse::<i32>()?,
             value: first_vote["value"].as_bool().unwrap(),
             created_at: Utc::now().naive_utc(),

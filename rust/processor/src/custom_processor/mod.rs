@@ -1,10 +1,14 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod multisig_processor;
+use std::fmt::Debug;
 
-use crate::custom_processor::multisig_processor::MultisigProcessor;
-use crate::processors::ProcessingResult;
+use aptos_protos::transaction::v1::Transaction as ProtoTransaction;
+use async_trait::async_trait;
+use diesel::{ExpressionMethods, pg::upsert::excluded};
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
+
 use crate::{
     models::processor_status::ProcessorStatus,
     schema::processor_status,
@@ -14,12 +18,11 @@ use crate::{
         util::parse_timestamp,
     },
 };
-use aptos_protos::transaction::v1::Transaction as ProtoTransaction;
-use async_trait::async_trait;
-use diesel::{pg::upsert::excluded, ExpressionMethods};
-use enum_dispatch::enum_dispatch;
-use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use crate::custom_processor::multisig_processor::MultisigProcessor;
+use crate::processors::ProcessingResult;
+
+pub mod multisig_processor;
+mod utils;
 
 /// Base trait for all processors
 #[async_trait]
@@ -151,8 +154,9 @@ pub enum CustomProcessor {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use strum::VariantNames;
+
+    use super::*;
 
     /// This test exists to make sure that when a new processor is added, it is added
     /// to both Processor and ProcessorConfig. To make sure this passes, make sure the
