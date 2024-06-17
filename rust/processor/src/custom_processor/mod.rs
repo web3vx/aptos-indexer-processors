@@ -5,10 +5,11 @@ use std::fmt::Debug;
 
 use aptos_protos::transaction::v1::Transaction as ProtoTransaction;
 use async_trait::async_trait;
-use diesel::{ExpressionMethods, pg::upsert::excluded};
+use diesel::{pg::upsert::excluded, ExpressionMethods};
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
+use crate::custom_processor::multisig_processor::MultisigProcessor;
 use crate::{
     models::processor_status::ProcessorStatus,
     schema::processor_status,
@@ -18,11 +19,11 @@ use crate::{
         util::parse_timestamp,
     },
 };
-use crate::custom_processor::multisig_processor::MultisigProcessor;
-use crate::processors::ProcessingResult;
 
 pub mod multisig_processor;
-mod utils;
+pub mod serde_helper;
+pub mod types;
+pub mod utils;
 
 /// Base trait for all processors
 #[async_trait]

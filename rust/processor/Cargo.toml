@@ -17,8 +17,8 @@ ahash = { workspace = true }
 anyhow = { workspace = true }
 aptos-moving-average = { workspace = true }
 aptos-protos = { workspace = true }
-aptos-sdk = { workspace = true }
 async-trait = { workspace = true }
+move-core-types = { workspace = true }
 base64 = { workspace = true }
 bcs = { workspace = true }
 bigdecimal = { workspace = true }
@@ -60,6 +60,8 @@ url = { workspace = true }
 native-tls = { workspace = true }
 postgres-native-tls = { workspace = true }
 tokio-postgres = { workspace = true }
+serde_bytes = { workspace = true }
+reqwest = "0.11.20"
 
 [target.'cfg(unix)'.dependencies]
 jemallocator = { workspace = true }

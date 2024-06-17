@@ -16,10 +16,12 @@ rust-version = "1.75"
 processor = { path = "processor" }
 server-framework = { path = "server-framework" }
 aptos-moving-average = { path = "moving-average" }
+move-core-types = { path = "move-core" }
 
 ahash = { version = "0.8.7", features = ["serde"] }
 anyhow = "1.0.62"
 aptos-protos = { git = "https://github.com/aptos-labs/aptos-core.git", tag = "aptos-node-v1.12.1" }
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core.git", branch = "testnet" }
 aptos-system-utils = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "4541add3fd29826ec57f22658ca286d2d6134b93" }
 async-trait = "0.1.53"
 backtrace = "0.3.58"
@@ -102,8 +104,24 @@ tracing = "0.1.34"
 unescape = "0.1.0"
 url = { version = "2.4.0", features = ["serde"] }
 warp = { version = "0.3.5", features = ["tls"] }
+arbitrary = { version = "1.3.2", features = ["derive"] }
+bytes = { version = "1.4.0", features = ["serde"] }
+ethnum = "1.5.0"
+hashbrown = "0.14.3"
+num = "0.4.0"
+primitive-types = { version = "0.10" }
+proptest = "1.4.0"
+proptest-derive = "0.4.0"
+ref-cast = "1.0.6"
+serde_bytes = "0.11.6"
+thiserror = "1.0.37"
+uint = "0.9.4"
 
 # Postgres SSL support
 native-tls = "0.2.11"
 postgres-native-tls = "0.5.0"
 tokio-postgres = "0.7.10"
+
+[patch.crates-io]
+merlin = { git = "https://github.com/aptos-labs/merlin" }
+x25519-dalek = { git = "https://github.com/aptos-labs/x25519-dalek", branch = "zeroize_v1" }
