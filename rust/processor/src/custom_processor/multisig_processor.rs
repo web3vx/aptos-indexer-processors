@@ -7,7 +7,6 @@ use ahash::AHashMap;
 use aptos_protos::transaction::v1::{Event, Transaction, transaction::TxnData, WriteResource};
 use aptos_protos::transaction::v1::write_set_change::Change;
 use async_trait::async_trait;
-use bcs::from_bytes;
 use chrono::Utc;
 use diesel::{
     BoolExpressionMethods,
@@ -17,7 +16,6 @@ use diesel::{
 use serde_json::Value;
 use tracing::log::info;
 
-use move_core_types::value::MoveValue;
 
 use crate::{
     models::multisig_owner_models::multisig_owner::MultisigOwner,
@@ -30,8 +28,6 @@ use crate::{
     },
 };
 use crate::custom_processor::{CustomProcessorName, CustomProcessorTrait};
-use crate::custom_processor::types::multisig::{EntryFunction, MultisigTransactionPayload};
-use crate::custom_processor::utils::mapper::map_string_to_move_type;
 use crate::custom_processor::utils::utils::{decode_event_payload, parse_payload, process_entry_function};
 use crate::models::multisig_transaction_models::multisig_transaction::MultisigTransaction;
 use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;

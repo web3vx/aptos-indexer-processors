@@ -31,7 +31,6 @@ use super::{ProcessingResult, ProcessorName, ProcessorTrait};
 static FILTERED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
         "0x1::transaction_fee::FeeStatement",
-        "0x1::multisig_account::create_with_owners",
     ]
 });
 static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
@@ -191,7 +190,7 @@ impl ProcessorTrait for EventsProcessor {
                 &inserted_at,
             );
             for txn_event in txn_events {
-                if (!FILTERED_EVENTS.contains(&txn_event.type_.as_str()) || REQUIRED_EVENTS.contains(&txn_event.type_.as_str())) && !FILTERED_EVENTS.contains(&txn_event.entry_function_id_str.as_str())
+                if !FILTERED_EVENTS.contains(&txn_event.type_.as_str()) || REQUIRED_EVENTS.contains(&txn_event.type_.as_str())
                 {
                     events.push(txn_event);
                 }
