@@ -23,11 +23,7 @@ ALTER TABLE token_datas
 ADD COLUMN description TEXT NOT NULL;
 ALTER TABLE current_token_datas
 ADD COLUMN description TEXT NOT NULL;
--- Add epoch to user transactions and transactions
-ALTER TABLE user_transactions
-ADD COLUMN epoch BIGINT NULL;
 ALTER TABLE transactions
 ADD COLUMN epoch BIGINT NOT NULL;
 -- Create index on epoch for easy queries
-CREATE INDEX ut_epoch_index ON user_transactions (epoch);
 CREATE INDEX txn_epoch_index ON transactions (epoch);

@@ -153,20 +153,8 @@ CREATE INDEX bmt_insat_index ON block_metadata_transactions (inserted_at);
  */
 CREATE TABLE user_transactions (
   version BIGINT UNIQUE PRIMARY KEY NOT NULL,
-  block_height BIGINT  NULL,
-  parent_signature_type VARCHAR(50)  NULL,
   sender VARCHAR(66) NOT NULL,
-  sequence_number BIGINT  NULL,
-  max_gas_amount NUMERIC  NULL,
-  expiration_timestamp_secs TIMESTAMP  NULL,
-  gas_unit_price NUMERIC  NULL,
-  -- from UserTransaction
-  "timestamp" TIMESTAMP  NULL,
-  entry_function_id_str text  NULL,
-  -- Default time columns
-  inserted_at TIMESTAMP  NULL DEFAULT NOW(),
-  -- Constraints
-  CONSTRAINT fk_versions FOREIGN KEY (version) REFERENCES transactions (version)
+  entry_function_id_str text  NULL
 );
 CREATE INDEX ut_sender_seq_index ON user_transactions (sender);
 -- tracks signatures for user transactions
