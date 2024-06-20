@@ -23,6 +23,7 @@ use diesel::{
 };
 use std::fmt::Debug;
 use tracing::error;
+use crate::schema::transactions::version;
 
 pub struct UserTransactionProcessor {
     connection_pool: PgDbPool,
@@ -101,8 +102,7 @@ fn insert_user_transactions_query(
             .on_conflict(version)
             .do_update()
             .set((
-                expiration_timestamp_secs.eq(excluded(expiration_timestamp_secs)),
-                inserted_at.eq(excluded(inserted_at)),
+                version.eq(excluded(version)),
             )),
         None,
     )
