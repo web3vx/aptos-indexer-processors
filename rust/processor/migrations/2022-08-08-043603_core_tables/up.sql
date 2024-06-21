@@ -153,8 +153,9 @@ CREATE INDEX bmt_insat_index ON block_metadata_transactions (inserted_at);
  */
 CREATE TABLE user_transactions (
   version BIGINT UNIQUE PRIMARY KEY NOT NULL,
-  sender VARCHAR(66) NOT NULL,
-  entry_function_id_str text  NULL
+  sender VARCHAR(66) NOT NULL
+--                                ,
+--   entry_function_id_str text  NULL
 );
 CREATE INDEX ut_sender_seq_index ON user_transactions (sender);
 -- tracks signatures for user transactions
