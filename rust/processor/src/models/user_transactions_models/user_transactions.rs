@@ -31,6 +31,15 @@ pub struct UserTransaction {
     pub entry_function_id_str: String,
 }
 
+
+#[derive(Clone, Deserialize, Debug, FieldCount, Identifiable, Insertable, Serialize)]
+#[diesel(primary_key(version))]
+#[diesel(table_name = user_transactions)]
+pub struct UserTransactionModelWithoutEntryFunctionIdStr {
+    pub version: i64,
+    pub sender: String,
+}
+
 impl UserTransaction {
     pub fn from_transaction(
         txn: &UserTransactionPB,

@@ -23,6 +23,7 @@ use diesel::{
 };
 use std::fmt::Debug;
 use tracing::error;
+use crate::models::user_transactions_models::user_transactions::UserTransactionModelWithoutEntryFunctionIdStr;
 use crate::schema::transactions::version;
 
 pub struct UserTransactionProcessor {
@@ -89,16 +90,23 @@ async fn insert_to_db(
     Ok(())
 }
 
+
 fn insert_user_transactions_query(
     items_to_insert: Vec<UserTransactionModel>,
 ) -> (
     impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send,
     Option<&'static str>,
 ) {
+    let items_to_insert_without_entry_function_id_str: Vec<UserTransactionModelWithoutEntryFunctionIdStr> = items_to_insert.into_iter().map(|item| {
+        UserTransactionModelWithoutEntryFunctionIdStr {
+            version: item.version,
+            sender: item.sender,
+        }
+    }).collect();
     use schema::user_transactions::dsl::*;
     (
         diesel::insert_into(schema::user_transactions::table)
-            .values(items_to_insert)
+            .values(items_to_insert_without_entry_function_id_str)
             .on_conflict(version)
             .do_update()
             .set((
