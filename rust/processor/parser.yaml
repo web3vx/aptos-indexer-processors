@@ -10,5 +10,5 @@ server_config:
   postgres_connection_string: postgresql://dmr@localhost:5432/indexer
   indexer_grpc_data_service_address: https://grpc.testnet.aptoslabs.com:443
   auth_token: aptoslabs_DTGfQeE2QYA_CTuCQbhj7zFyKA8diwS43MifoevqJGw7D
-  starting_version: 1247147413
-  ending_version: 1247147413
+  starting_version: 1256021084
+  ending_version: 1256021084

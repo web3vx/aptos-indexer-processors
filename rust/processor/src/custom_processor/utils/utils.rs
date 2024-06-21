@@ -15,7 +15,7 @@ pub fn parse_event_data(data: &str) -> anyhow::Result<Value> {
 pub fn decode_event_payload(event_data: &Value) -> anyhow::Result<Vec<u8>> {
     let payload_str = event_data["transaction"]["payload"]["vec"]
         .as_array()
-        .ok_or_else(|| anyhow::anyhow!("Payload vector missing"))?
+        .ok_or(anyhow::anyhow!("Payload vector missing"))?
         .get(0)
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Payload string missing"))?;
