@@ -249,9 +249,12 @@ fn insert_multisig_voting_transaction_query(
     (
         diesel::insert_into(schema::multisig_voting_transactions::table)
             .values(votes)
-            .on_conflict((transaction_sequence, wallet_address, voter_address, value))
+            .on_conflict((transaction_sequence, wallet_address, voter_address))
             .do_update()
-            .set((created_at.eq(excluded(created_at)),)),
+            .set((
+                created_at.eq(excluded(created_at)),
+                value.eq(excluded(value)),
+            )),
         None,
     )
 }
@@ -438,7 +441,6 @@ async fn handle_create_transaction_event(
     event: &Event,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
-
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
     let json_payload = process_entry_function(&payload_parsed).await?;
