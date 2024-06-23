@@ -4,19 +4,29 @@
 use std::fmt::Debug;
 
 use ahash::AHashMap;
-use aptos_protos::transaction::v1::{Event, Transaction, transaction::TxnData, WriteResource};
 use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::{transaction::TxnData, Event, Transaction, WriteResource};
 use async_trait::async_trait;
 use chrono::Utc;
 use diesel::{
-    BoolExpressionMethods,
-    ExpressionMethods,
-    pg::{Pg, upsert::excluded}, query_builder::QueryFragment,
+    pg::{upsert::excluded, Pg},
+    query_builder::QueryFragment,
+    BoolExpressionMethods, ExpressionMethods,
 };
 use serde_json::Value;
 use tracing::log::info;
 
-
+use crate::custom_processor::utils::utils::{
+    decode_event_payload, parse_payload, process_entry_function,
+};
+use crate::custom_processor::{CustomProcessorName, CustomProcessorTrait};
+use crate::models::multisig_transaction_models::multisig_transaction::{
+    MultisigTransaction, TransactionStatus,
+};
+use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
+use crate::schema::multisig_transactions::{sequence_number, status, wallet_address};
+use crate::utils::database::execute_with_better_error;
+use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 use crate::{
     models::multisig_owner_models::multisig_owner::MultisigOwner,
     models::multisig_owner_wallet_models::multisig_owner_wallet::OwnersWallet,
@@ -27,13 +37,6 @@ use crate::{
         database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
     },
 };
-use crate::custom_processor::{CustomProcessorName, CustomProcessorTrait};
-use crate::custom_processor::utils::utils::{decode_event_payload, parse_payload, process_entry_function};
-use crate::models::multisig_transaction_models::multisig_transaction::MultisigTransaction;
-use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
-use crate::schema::multisig_transactions::{sequence_number, status, wallet_address};
-use crate::utils::database::execute_with_better_error;
-use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 
 pub struct MultisigProcessor {
     connection_pool: PgDbPool,
@@ -246,9 +249,12 @@ fn insert_multisig_voting_transaction_query(
     (
         diesel::insert_into(schema::multisig_voting_transactions::table)
             .values(votes)
-            .on_conflict((transaction_sequence, wallet_address, voter_address, value))
+            .on_conflict((transaction_sequence, wallet_address, voter_address))
             .do_update()
-            .set((created_at.eq(excluded(created_at)),)),
+            .set((
+                created_at.eq(excluded(created_at)),
+                value.eq(excluded(value)),
+            )),
         None,
     )
 }
@@ -404,10 +410,16 @@ async fn handle_transaction_status_event(
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
     let new_status: i32 = match event.type_str.as_str() {
-        "0x1::multisig_account::ExecuteRejectedTransactionEvent" => 2,
-        "0x1::multisig_account::TransactionExecutionSucceededEvent" => 3,
-        "0x1::multisig_account::TransactionExecutionFailedEvent" => 4,
-        _ => 0,
+        "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
+            TransactionStatus::Rejected as i32
+        },
+        "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
+            TransactionStatus::Success as i32
+        },
+        "0x1::multisig_account::TransactionExecutionFailedEvent" => {
+            TransactionStatus::Failed as i32
+        },
+        _ => TransactionStatus::Pending as i32,
     };
 
     update_transaction_status(
@@ -429,7 +441,6 @@ async fn handle_create_transaction_event(
     event: &Event,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
-
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
     let json_payload = process_entry_function(&payload_parsed).await?;
@@ -443,7 +454,7 @@ async fn handle_create_transaction_event(
         payload: json_payload,
         payload_hash: Some(event_data["transaction"]["payload_hash"].clone()),
         created_at: Utc::now().naive_utc(),
-        status: 0,
+        status: TransactionStatus::Pending as i32,
     };
     insert_to_transaction_db(
         &processor.get_pool(),
@@ -455,15 +466,24 @@ async fn handle_create_transaction_event(
     Ok(())
 }
 
-async fn process_votes(processor: &MultisigProcessor, event: &Event, event_data: &Value) -> anyhow::Result<()> {
+async fn process_votes(
+    processor: &MultisigProcessor,
+    event: &Event,
+    event_data: &Value,
+) -> anyhow::Result<()> {
     let vote_array = event_data["transaction"]["votes"]["data"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Votes data missing"))?;
     if let Some(first_vote) = vote_array.get(0) {
         let multisig_vote = MultisigVotingTransaction {
-            wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
+            wallet_address: standardize_address(
+                event.key.as_ref().unwrap().account_address.as_str(),
+            ),
             voter_address: standardize_address(first_vote["key"].as_str().unwrap()),
-            transaction_sequence: event_data["sequence_number"].as_str().unwrap_or("0").parse()?,
+            transaction_sequence: event_data["sequence_number"]
+                .as_str()
+                .unwrap_or("0")
+                .parse()?,
             value: first_vote["value"].as_bool().unwrap(),
             created_at: Utc::now().naive_utc(),
         };
@@ -472,7 +492,7 @@ async fn process_votes(processor: &MultisigProcessor, event: &Event, event_data:
             &[multisig_vote],
             &processor.per_table_chunk_sizes,
         )
-            .await?;
+        .await?;
     }
     Ok(())
 }
