@@ -12,7 +12,17 @@ pub enum TransactionStatus {
     Failed = 4,
 }
 
-#[derive(Clone, Debug, Deserialize, FieldCount, Identifiable, Queryable, Insertable, Serialize, AsChangeset)]
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    FieldCount,
+    Identifiable,
+    Queryable,
+    Insertable,
+    Serialize,
+    AsChangeset,
+)]
 #[diesel(table_name = multisig_transactions)]
 #[diesel(primary_key(wallet_address, sequence_number))]
 pub struct MultisigTransaction {
@@ -23,4 +33,6 @@ pub struct MultisigTransaction {
     pub payload_hash: Option<Value>,
     pub status: i32,
     pub created_at: NaiveDateTime,
+    pub executed_at: Option<NaiveDateTime>,
+    pub executor: Option<String>,
 }

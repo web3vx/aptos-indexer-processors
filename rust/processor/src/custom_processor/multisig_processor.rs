@@ -7,12 +7,13 @@ use ahash::AHashMap;
 use aptos_protos::transaction::v1::write_set_change::Change;
 use aptos_protos::transaction::v1::{transaction::TxnData, Event, Transaction, WriteResource};
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 use diesel::{
     pg::{upsert::excluded, Pg},
     query_builder::QueryFragment,
     BoolExpressionMethods, ExpressionMethods,
 };
+use futures::executor;
 use serde_json::Value;
 use tracing::log::info;
 
@@ -149,6 +150,8 @@ async fn update_transaction_status(
     filter_wallet_address: String,
     filter_sequence_number: i32,
     new_status: i32,
+    executor: Option<String>,
+    executed_at: Option<NaiveDateTime>,
 ) -> anyhow::Result<()> {
     execute_with_better_error(
         pool.clone(),
@@ -409,17 +412,22 @@ async fn handle_transaction_status_event(
     event: &Event,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
-    let new_status: i32 = match event.type_str.as_str() {
+    let mut executor = None;
+    let mut executed_at = None;
+    let mut new_status: i32 = TransactionStatus::Pending as i32;
+    match event.type_str.as_str() {
         "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
-            TransactionStatus::Rejected as i32
+            new_status = TransactionStatus::Rejected as i32;
         },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
-            TransactionStatus::Success as i32
+            new_status = TransactionStatus::Success as i32;
+            executor = Some(event_data["executor"].as_str().unwrap().to_string());
+            executed_at = Some(Utc::now().naive_utc());
         },
         "0x1::multisig_account::TransactionExecutionFailedEvent" => {
-            TransactionStatus::Failed as i32
+            new_status = TransactionStatus::Failed as i32
         },
-        _ => TransactionStatus::Pending as i32,
+        _ => {},
     };
 
     update_transaction_status(
@@ -430,6 +438,8 @@ async fn handle_transaction_status_event(
             .unwrap_or("0")
             .parse::<i32>()?,
         new_status,
+        executor,
+        executed_at,
     )
     .await?;
 
@@ -455,6 +465,8 @@ async fn handle_create_transaction_event(
         payload_hash: Some(event_data["transaction"]["payload_hash"].clone()),
         created_at: Utc::now().naive_utc(),
         status: TransactionStatus::Pending as i32,
+        executor: None,
+        executed_at: None,
     };
     insert_to_transaction_db(
         &processor.get_pool(),
@@ -462,7 +474,7 @@ async fn handle_create_transaction_event(
         &processor.per_table_chunk_sizes,
     )
     .await?;
-    process_votes(processor, &event, &event_data).await?;
+    process_votes(processor, event, &event_data).await?;
     Ok(())
 }
 
