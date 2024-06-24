@@ -3,6 +3,7 @@ cursor.txt
 build
 node_modules/
 **/parser.yaml
+**/.env
 # Rust specific ignores
 # Please follow https://help.github.com/en/articles/ignoring-files to create a global
 # .gitignore file locally for IDE/Emacs/Vim generated files.
@@ -34,4 +35,3 @@ node_modules/
 
 # Cached python files
 __pycache__
-

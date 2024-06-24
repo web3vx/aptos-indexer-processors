@@ -879,6 +879,9 @@ diesel::table! {
         payload_hash -> Nullable<Jsonb>,
         status -> Int4,
         created_at -> Nullable<Timestamp>,
+        #[max_length = 255]
+        executor -> Nullable<Varchar>,
+        executed_at -> Nullable<Timestamp>,
     }
 }
 
