@@ -13,7 +13,6 @@ use diesel::{
     query_builder::QueryFragment,
     BoolExpressionMethods, ExpressionMethods,
 };
-use futures::executor;
 use serde_json::Value;
 use tracing::log::info;
 
@@ -25,7 +24,9 @@ use crate::models::multisig_transaction_models::multisig_transaction::{
     MultisigTransaction, TransactionStatus,
 };
 use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
-use crate::schema::multisig_transactions::{sequence_number, status, wallet_address};
+use crate::schema::multisig_transactions::{
+    executed_at, executor, sequence_number, status, wallet_address,
+};
 use crate::utils::database::execute_with_better_error;
 use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 use crate::{
@@ -150,13 +151,17 @@ async fn update_transaction_status(
     filter_wallet_address: String,
     filter_sequence_number: i32,
     new_status: i32,
-    executor: Option<String>,
-    executed_at: Option<NaiveDateTime>,
+    new_executor: Option<String>,
+    new_executed_at: Option<NaiveDateTime>,
 ) -> anyhow::Result<()> {
     execute_with_better_error(
         pool.clone(),
         diesel::update(schema::multisig_transactions::table)
-            .set((status.eq(new_status),))
+            .set((
+                status.eq(new_status),
+                executor.eq(new_executor),
+                executed_at.eq(new_executed_at),
+            ))
             .filter(
                 wallet_address
                     .eq(filter_wallet_address)
@@ -412,8 +417,8 @@ async fn handle_transaction_status_event(
     event: &Event,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
-    let mut executor = None;
-    let mut executed_at = None;
+    let mut new_executor = None;
+    let mut new_executed_at = None;
     let mut new_status: i32 = TransactionStatus::Pending as i32;
     match event.type_str.as_str() {
         "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
@@ -421,8 +426,8 @@ async fn handle_transaction_status_event(
         },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
             new_status = TransactionStatus::Success as i32;
-            executor = Some(event_data["executor"].as_str().unwrap().to_string());
-            executed_at = Some(Utc::now().naive_utc());
+            new_executor = Some(event_data["executor"].as_str().unwrap().to_string());
+            new_executed_at = Some(Utc::now().naive_utc());
         },
         "0x1::multisig_account::TransactionExecutionFailedEvent" => {
             new_status = TransactionStatus::Failed as i32
@@ -438,8 +443,8 @@ async fn handle_transaction_status_event(
             .unwrap_or("0")
             .parse::<i32>()?,
         new_status,
-        executor,
-        executed_at,
+        new_executor,
+        new_executed_at,
     )
     .await?;
 
