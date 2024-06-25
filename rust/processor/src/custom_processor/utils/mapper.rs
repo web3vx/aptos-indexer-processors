@@ -11,14 +11,16 @@ pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
         "u128" => Some(MoveTypeLayout::U128),
         "u256" => Some(MoveTypeLayout::U256),
         "&signer" => Some(MoveTypeLayout::Signer),
-        "vector<address>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8))),
-        "vector<bool>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::Bool))),
-        "vector<u8>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8))),
-        "vector<u16>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U16))),
-        "vector<u32>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U32))),
-        "vector<u64>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64))),
-        "vector<u128>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U128))),
-        "vector<u256>" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U256))),
-        _ => None,
+        "0x1::object::Object" => Some(MoveTypeLayout::Address),
+        "0x1::string::String" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8))),
+        _ => parse_vector(type_string),
+    }
+}
+
+fn parse_vector(type_string: &str) -> Option<MoveTypeLayout> {
+    if let Some(stripped) = type_string.strip_prefix("vector<").and_then(|s| s.strip_suffix(">")) {
+        map_string_to_move_type(stripped).map(|layout| MoveTypeLayout::Vector(Box::new(layout)))
+    } else {
+        None
     }
 }

@@ -45,7 +45,7 @@ async fn fetch_function_details(module: &ModuleId) -> anyhow::Result<Value> {
         module.address, module.name
     );
     let response = reqwest::get(&request_url).await?;
-    response.json::<Value>().await.map_err(anyhow::Error::new)
+    response.json::<Value>().await.map_err(|error| anyhow::anyhow!("Error: {:?}", error))
 }
 
 pub fn parse_function_args(
@@ -67,9 +67,11 @@ pub fn parse_function_args(
     args.iter()
         .enumerate()
         .map(|(index, arg)| {
-            let type_layout = map_string_to_move_type(function_params[index].as_str().unwrap())
-                .ok_or(anyhow::anyhow!("Type not found"))?;
-            let move_value = MoveValue::simple_deserialize(arg, &type_layout)?;
+            let type_layout = map_string_to_move_type(function_params[index].as_str().unwrap());
+            if type_layout.is_none() {
+                return Ok(Value::Null);
+            };
+            let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
             Ok(serde_json::to_value(move_value.to_string())?)
         })
         .collect()
