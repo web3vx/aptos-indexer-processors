@@ -6,11 +6,15 @@ on:
       - 'features/implement-multisig-transaction-testnet'
 jobs:
   deploy:
-    runs-on: multisig-testnet
+    runs-on: multisig-testnet # 236416
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - run: |
+          docker stop multisig-indexer
+          docker rm multisig-indexer
+          docker rmi multisig-indexer
+          docker builder prune --all -f
           cd rust
           echo "${{ secrets.ENV_FILE_MULTISIG_TESTNET }}" >> config.yaml
           docker build . -t multisig-indexer
