@@ -3,10 +3,11 @@ use serde_json::Value;
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::value::MoveValue;
+use move_core_types::value::{MoveTypeLayout, MoveValue};
+use MoveValue::U8;
 
 use crate::custom_processor::types::multisig::MultisigTransactionPayload;
-use crate::custom_processor::utils::mapper::map_string_to_move_type;
+use crate::custom_processor::utils::mapper::{map_string_to_move_type, parse_nested_vectors};
 
 pub fn parse_event_data(data: &str) -> anyhow::Result<Value> {
     serde_json::from_str(data).map_err(anyhow::Error::new)
@@ -45,7 +46,10 @@ async fn fetch_function_details(module: &ModuleId) -> anyhow::Result<Value> {
         module.address, module.name
     );
     let response = reqwest::get(&request_url).await?;
-    response.json::<Value>().await.map_err(|error| anyhow::anyhow!("Error: {:?}", error))
+    response
+        .json::<Value>()
+        .await
+        .map_err(|error| anyhow::anyhow!("Error: {:?}", error))
 }
 
 pub fn parse_function_args(
@@ -72,6 +76,10 @@ pub fn parse_function_args(
                 return Ok(Value::Null);
             };
             let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
+            if let MoveValue::Vector(_) = move_value {
+                let json_vec = parse_nested_vectors(&move_value.to_string());
+                return Ok(serde_json::to_value(json_vec)?);
+            }
             Ok(serde_json::to_value(move_value.to_string())?)
         })
         .collect()
