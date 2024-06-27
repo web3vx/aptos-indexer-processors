@@ -3,8 +3,7 @@ use serde_json::Value;
 
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
-use move_core_types::value::{MoveTypeLayout, MoveValue};
-use MoveValue::U8;
+use move_core_types::value::MoveValue;
 
 use crate::custom_processor::types::multisig::MultisigTransactionPayload;
 use crate::custom_processor::utils::mapper::{map_string_to_move_type, parse_nested_move_values};

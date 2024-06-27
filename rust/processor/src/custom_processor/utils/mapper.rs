@@ -1,6 +1,4 @@
 use move_core_types::value::{MoveTypeLayout, MoveValue};
-use regex::Regex;
-use std::error::Error;
 use std::str::from_utf8;
 
 pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
