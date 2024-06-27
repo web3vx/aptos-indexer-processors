@@ -76,7 +76,11 @@ pub fn parse_function_args(
             };
             let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
             let json_vec = parse_nested_move_values(&move_value);
-            Ok(serde_json::from_str(&json_vec)?)
+            let json_value = serde_json::from_str(&json_vec);
+            if json_value.is_err() {
+                return Ok(Value::Null);
+            }
+            Ok(json_value.unwrap())
         })
         .collect()
 }

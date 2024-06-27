@@ -36,7 +36,7 @@ pub fn parse_nested_move_values(input: &MoveValue) -> String {
                 return String::from("[]");
             }
             if let MoveValue::U8(_) = vec[0] {
-                return parse_string_vectors(&input.to_string());
+                return format!("\"{}\"",parse_string_vectors(&input.to_string()))
             }
             let mut result = String::from("[");
             for value in vec {
