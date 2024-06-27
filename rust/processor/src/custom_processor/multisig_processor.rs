@@ -458,7 +458,7 @@ async fn handle_create_transaction_event(
     let event_data: Value = serde_json::from_str(&event.data)?;
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
-    let json_payload = process_entry_function(&payload_parsed).await?;
+    let json_payload = process_entry_function(&payload_parsed).await.unwrap_or_else(|_| Value::Null);
     let multisig_transaction = MultisigTransaction {
         wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
         sequence_number: event_data["sequence_number"]
