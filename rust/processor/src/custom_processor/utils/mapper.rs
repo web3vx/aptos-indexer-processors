@@ -1,4 +1,4 @@
-use move_core_types::value::MoveTypeLayout;
+use move_core_types::value::{MoveTypeLayout, MoveValue};
 use regex::Regex;
 use std::error::Error;
 use std::str::from_utf8;
@@ -31,40 +31,57 @@ fn parse_vector(type_string: &str) -> Option<MoveTypeLayout> {
     }
 }
 
-pub fn parse_nested_vectors(input: &str) -> String {
+pub fn parse_nested_move_values(input: &MoveValue) -> String {
+    match input {
+        MoveValue::Vector(vec) => {
+            if vec.is_empty() {
+                return String::from("[]");
+            }
+            if let MoveValue::U8(_) = vec[0] {
+                return parse_string_vectors(&input.to_string());
+            }
+            let mut result = String::from("[");
+            for value in vec {
+                result.push_str(&parse_nested_move_values(value));
+                result.push_str(", ");
+            }
+            result.pop();
+            result.pop();
+            result.push(']');
+            result
+        },
+        MoveValue::U8(byte) => byte.to_string(),
+        MoveValue::U64(num) => num.to_string(),
+        MoveValue::U128(num) => num.to_string(),
+        MoveValue::U256(num) => num.to_string(),
+        MoveValue::Bool(boolean) => boolean.to_string(),
+        MoveValue::Address(address) => format!("\"{}\"", address.to_string()),
+        MoveValue::Signer(signer) => format!("\"{}\"", signer.to_string()),
+        _ => String::from("Unsupported type"),
+    }
+}
+
+pub fn parse_string_vectors(input: &str) -> String {
     let mut content = input.trim();
-    let mut start_string_result = String::from("");
-    let mut end_string_result = String::from("");
     while let Some(start) = content.find('[') {
         if let Some(end) = content.rfind(']') {
-            start_string_result.push_str("[");
-            end_string_result.push_str("]");
             content = &content[start + 1..end].trim();
         } else {
             break;
         }
     }
 
-    // At this point, `content` should be the innermost list: "114, 95, 110, 97, 109, 101"
     let bytes: Result<Vec<u8>, _> = content
         .split(',')
         .map(str::trim)
         .map(|num| num.parse::<u8>())
         .collect();
 
-    let parsed_string = match bytes {
-        Ok(vec) => {
-            start_string_result.pop();
-            end_string_result.pop();
-            from_utf8(&vec)
-                .map(String::from)
-                .ok()
-                .unwrap_or_else(|| content.to_string())
-        },
+    match bytes {
+        Ok(vec) => from_utf8(&vec)
+            .map(String::from)
+            .ok()
+            .unwrap_or_else(|| content.to_string()),
         Err(_) => content.to_string(), // Handle conversion error
-    };
-    format!(
-        "{}{}{}",
-        start_string_result, parsed_string, end_string_result
-    )
+    }
 }
