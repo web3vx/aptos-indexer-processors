@@ -7,7 +7,7 @@ use ahash::AHashMap;
 use aptos_protos::transaction::v1::write_set_change::Change;
 use aptos_protos::transaction::v1::{transaction::TxnData, Event, Transaction, WriteResource};
 use async_trait::async_trait;
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
     pg::{upsert::excluded, Pg},
     query_builder::QueryFragment,
@@ -325,7 +325,12 @@ impl CustomProcessorTrait for MultisigProcessor {
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
-                            handle_create_transaction_event(self, event).await?;
+                            handle_create_transaction_event(
+                                self,
+                                event,
+                                txn.clone().timestamp.unwrap().seconds,
+                            )
+                            .await?;
                         },
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
                         | "0x1::multisig_account::TransactionExecutionSucceededEvent"
@@ -333,7 +338,8 @@ impl CustomProcessorTrait for MultisigProcessor {
                             handle_transaction_status_event(self, event).await?;
                         },
                         "0x1::multisig_account::VoteEvent" => {
-                            handle_vote_event(self, event).await?;
+                            handle_vote_event(self, event, txn.clone().timestamp.unwrap().seconds)
+                                .await?;
                         },
                         _ => {},
                     }
@@ -389,7 +395,11 @@ async fn process_write_resource(
     Ok(())
 }
 
-async fn handle_vote_event(processor: &MultisigProcessor, event: &Event) -> anyhow::Result<()> {
+async fn handle_vote_event(
+    processor: &MultisigProcessor,
+    event: &Event,
+    timestamp: i64,
+) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
 
     let multisig_vote = MultisigVotingTransaction {
@@ -400,7 +410,7 @@ async fn handle_vote_event(processor: &MultisigProcessor, event: &Event) -> anyh
             .parse::<i32>()?,
         voter_address: event_data["owner"].as_str().unwrap().to_string(),
         value: event_data["approved"].as_bool().unwrap(),
-        created_at: Utc::now().naive_utc(),
+        created_at: DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc(),
     };
 
     insert_to_votes_db(
@@ -454,11 +464,14 @@ async fn handle_transaction_status_event(
 async fn handle_create_transaction_event(
     processor: &MultisigProcessor,
     event: &Event,
+    timestamp: i64,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
-    let json_payload = process_entry_function(&payload_parsed).await.unwrap_or_else(|_| Value::Null);
+    let json_payload = process_entry_function(&payload_parsed)
+        .await
+        .unwrap_or_else(|_| Value::Null);
     let multisig_transaction = MultisigTransaction {
         wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
         sequence_number: event_data["sequence_number"]
@@ -468,7 +481,7 @@ async fn handle_create_transaction_event(
         initiated_by: event_data["creator"].as_str().unwrap_or("").to_string(),
         payload: json_payload,
         payload_hash: Some(event_data["transaction"]["payload_hash"].clone()),
-        created_at: Utc::now().naive_utc(),
+        created_at: DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc(),
         status: TransactionStatus::Pending as i32,
         executor: None,
         executed_at: None,
@@ -479,7 +492,7 @@ async fn handle_create_transaction_event(
         &processor.per_table_chunk_sizes,
     )
     .await?;
-    process_votes(processor, event, &event_data).await?;
+    process_votes(processor, event, &event_data, timestamp).await?;
     Ok(())
 }
 
@@ -487,6 +500,7 @@ async fn process_votes(
     processor: &MultisigProcessor,
     event: &Event,
     event_data: &Value,
+    timestamp: i64,
 ) -> anyhow::Result<()> {
     let vote_array = event_data["transaction"]["votes"]["data"]
         .as_array()
@@ -502,7 +516,7 @@ async fn process_votes(
                 .unwrap_or("0")
                 .parse()?,
             value: first_vote["value"].as_bool().unwrap(),
-            created_at: Utc::now().naive_utc(),
+            created_at: DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc(),
         };
         insert_to_votes_db(
             &processor.get_pool(),
