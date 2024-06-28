@@ -335,7 +335,7 @@ impl CustomProcessorTrait for MultisigProcessor {
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
                         | "0x1::multisig_account::TransactionExecutionSucceededEvent"
                         | "0x1::multisig_account::TransactionExecutionFailedEvent" => {
-                            handle_transaction_status_event(self, event).await?;
+                            handle_transaction_status_event(self, event, txn.clone().timestamp.unwrap().seconds).await?;
                         },
                         "0x1::multisig_account::VoteEvent" => {
                             handle_vote_event(self, event, txn.clone().timestamp.unwrap().seconds)
@@ -425,6 +425,7 @@ async fn handle_vote_event(
 async fn handle_transaction_status_event(
     processor: &MultisigProcessor,
     event: &Event,
+    timestamp: i64,
 ) -> anyhow::Result<()> {
     let event_data: Value = serde_json::from_str(&event.data)?;
     let mut new_executor = None;
@@ -437,7 +438,7 @@ async fn handle_transaction_status_event(
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
             new_status = TransactionStatus::Success as i32;
             new_executor = Some(event_data["executor"].as_str().unwrap().to_string());
-            new_executed_at = Some(Utc::now().naive_utc());
+            new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
         },
         "0x1::multisig_account::TransactionExecutionFailedEvent" => {
             new_status = TransactionStatus::Failed as i32
