@@ -19,7 +19,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::Digest;
 use std::str::FromStr;
-use tracing::info;
 
 // 9999-12-31 23:59:59, this is the max supported by Google BigQuery
 pub const MAX_TIMESTAMP_SECS: i64 = 253_402_300_799;
@@ -90,9 +89,10 @@ pub fn ensure_not_negative(val: BigDecimal) -> BigDecimal {
 pub fn get_entry_function_from_user_request(
     user_request: &UserTransactionRequest,
 ) -> Option<String> {
-    // console log user_request
-    // info!("User request: {:?}", user_request);
-
+    let payload_option = user_request.payload.as_ref();
+    if payload_option.is_none() {
+        return None;
+    }
     let entry_function_id_str: String = match &user_request.payload.as_ref().unwrap().payload {
         Some(PayloadType::EntryFunctionPayload(payload)) => payload.entry_function_id_str.clone(),
         Some(PayloadType::MultisigPayload(payload)) => {
