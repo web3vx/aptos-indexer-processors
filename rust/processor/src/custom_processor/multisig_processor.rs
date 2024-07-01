@@ -468,6 +468,7 @@ async fn handle_create_transaction_event(
     timestamp: i64,
 ) -> anyhow::Result<()> {
     info!("Processing CreateTransactionEvent");
+    info!("Event data: {}", event.data);
     let event_data: Value = serde_json::from_str(&event.data)?;
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
