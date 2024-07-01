@@ -395,32 +395,32 @@ pub async fn create_fetcher_loop(
                         let step = ProcessorStep::ReceivedTxnsFromGrpc.get_step();
                         let label = ProcessorStep::ReceivedTxnsFromGrpc.get_label();
 
-                        info!(
-                            processor_name = processor_name,
-                            service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                            stream_address = indexer_grpc_data_service_address.to_string(),
-                            connection_id,
-                            start_version,
-                            end_version,
-                            start_txn_timestamp_iso = start_txn_timestamp
-                                .as_ref()
-                                .map(timestamp_to_iso)
-                                .unwrap_or_default(),
-                            end_txn_timestamp_iso = end_txn_timestamp
-                                .as_ref()
-                                .map(timestamp_to_iso)
-                                .unwrap_or_default(),
-                            num_of_transactions = end_version - start_version + 1,
-                            num_filtered_txns,
-                            channel_size = txn_sender.len(),
-                            size_in_bytes,
-                            duration_in_secs,
-                            tps = fetch_ma.avg().ceil() as u64,
-                            bytes_per_sec = size_in_bytes as f64 / duration_in_secs,
-                            step,
-                            "{}",
-                            label,
-                        );
+                        // info!(
+                        //     processor_name = processor_name,
+                        //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+                        //     stream_address = indexer_grpc_data_service_address.to_string(),
+                        //     connection_id,
+                        //     start_version,
+                        //     end_version,
+                        //     start_txn_timestamp_iso = start_txn_timestamp
+                        //         .as_ref()
+                        //         .map(timestamp_to_iso)
+                        //         .unwrap_or_default(),
+                        //     end_txn_timestamp_iso = end_txn_timestamp
+                        //         .as_ref()
+                        //         .map(timestamp_to_iso)
+                        //         .unwrap_or_default(),
+                        //     num_of_transactions = end_version - start_version + 1,
+                        //     num_filtered_txns,
+                        //     channel_size = txn_sender.len(),
+                        //     size_in_bytes,
+                        //     duration_in_secs,
+                        //     tps = fetch_ma.avg().ceil() as u64,
+                        //     bytes_per_sec = size_in_bytes as f64 / duration_in_secs,
+                        //     step,
+                        //     "{}",
+                        //     label,
+                        // );
 
                         if last_fetched_version + 1 != start_version as i64 {
                             error!(
@@ -601,38 +601,38 @@ pub async fn create_fetcher_loop(
             false
         };
         if is_end {
-            info!(
-                processor_name = processor_name,
-                service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                stream_address = indexer_grpc_data_service_address.to_string(),
-                connection_id,
-                ending_version = request_ending_version,
-                next_version_to_fetch = next_version_to_fetch,
-                "[Parser] Reached ending version.",
-            );
+            // info!(
+            //     processor_name = processor_name,
+            //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+            //     stream_address = indexer_grpc_data_service_address.to_string(),
+            //     connection_id,
+            //     ending_version = request_ending_version,
+            //     next_version_to_fetch = next_version_to_fetch,
+            //     "[Parser] Reached ending version.",
+            // );
             // Wait for the fetched transactions to finish processing before closing the channel
             loop {
                 let channel_size = txn_sender.len();
-                info!(
-                    processor_name = processor_name,
-                    service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                    stream_address = indexer_grpc_data_service_address.to_string(),
-                    connection_id,
-                    channel_size,
-                    "[Parser] Waiting for channel to be empty"
-                );
+                // info!(
+                //     processor_name = processor_name,
+                //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+                //     stream_address = indexer_grpc_data_service_address.to_string(),
+                //     connection_id,
+                //     channel_size,
+                //     "[Parser] Waiting for channel to be empty"
+                // );
                 if channel_size.is_zero() {
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
-            info!(
-                processor_name = processor_name,
-                service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                stream_address = indexer_grpc_data_service_address.to_string(),
-                connection_id,
-                "[Parser] Transaction fetcher send channel is closed."
-            );
+            // info!(
+            //     processor_name = processor_name,
+            //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+            //     stream_address = indexer_grpc_data_service_address.to_string(),
+            //     connection_id,
+            //     "[Parser] Transaction fetcher send channel is closed."
+            // );
             break;
         } else {
             // The rest is to see if we need to reconnect
@@ -654,15 +654,15 @@ pub async fn create_fetcher_loop(
                 panic!("[Parser] Reconnected more than {RECONNECTION_MAX_RETRIES} times. Will not retry.")
             }
             reconnection_retries += 1;
-            info!(
-                processor_name = processor_name,
-                service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                stream_address = indexer_grpc_data_service_address.to_string(),
-                starting_version = next_version_to_fetch,
-                ending_version = request_ending_version,
-                reconnection_retries = reconnection_retries,
-                "[Parser] Reconnecting to GRPC stream"
-            );
+            // info!(
+            //     processor_name = processor_name,
+            //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+            //     stream_address = indexer_grpc_data_service_address.to_string(),
+            //     starting_version = next_version_to_fetch,
+            //     ending_version = request_ending_version,
+            //     reconnection_retries = reconnection_retries,
+            //     "[Parser] Reconnecting to GRPC stream"
+            // );
             response = get_stream(
                 indexer_grpc_data_service_address.clone(),
                 indexer_grpc_http2_ping_interval,
@@ -679,16 +679,16 @@ pub async fn create_fetcher_loop(
                 None => "".to_string(),
             };
             resp_stream = response.into_inner();
-            info!(
-                processor_name = processor_name,
-                service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-                stream_address = indexer_grpc_data_service_address.to_string(),
-                connection_id,
-                starting_version = next_version_to_fetch,
-                ending_version = request_ending_version,
-                reconnection_retries = reconnection_retries,
-                "[Parser] Successfully reconnected to GRPC stream"
-            );
+            // info!(
+            //     processor_name = processor_name,
+            //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+            //     stream_address = indexer_grpc_data_service_address.to_string(),
+            //     connection_id,
+            //     starting_version = next_version_to_fetch,
+            //     ending_version = request_ending_version,
+            //     reconnection_retries = reconnection_retries,
+            //     "[Parser] Successfully reconnected to GRPC stream"
+            // );
         }
     }
 }

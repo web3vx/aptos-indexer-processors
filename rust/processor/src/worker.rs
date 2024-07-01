@@ -169,15 +169,15 @@ impl Worker {
 
         let starting_version = self.starting_version.unwrap_or(starting_version_from_db);
 
-        info!(
-            processor_name = processor_name,
-            service_type = PROCESSOR_SERVICE_TYPE,
-            stream_address = self.indexer_grpc_data_service_address.to_string(),
-            final_start_version = starting_version,
-            start_version_from_config = self.starting_version,
-            start_version_from_db = starting_version_from_db,
-            "[Parser] Building processor",
-        );
+        // info!(
+        //     processor_name = processor_name,
+        //     service_type = PROCESSOR_SERVICE_TYPE,
+        //     stream_address = self.indexer_grpc_data_service_address.to_string(),
+        //     final_start_version = starting_version,
+        //     start_version_from_config = self.starting_version,
+        //     start_version_from_db = starting_version_from_db,
+        //     "[Parser] Building processor",
+        // );
 
         let concurrent_tasks = self.number_concurrent_processing_tasks;
 
@@ -217,13 +217,13 @@ impl Worker {
         let grpc_response_item_timeout =
             std::time::Duration::from_secs(self.grpc_response_item_timeout_in_secs);
         let fetcher_task = tokio::spawn(async move {
-            info!(
-                processor_name = processor_name,
-                service_type = PROCESSOR_SERVICE_TYPE,
-                end_version = ending_version,
-                start_version = starting_version,
-                "[Parser] Starting fetcher thread"
-            );
+            // info!(
+            //     processor_name = processor_name,
+            //     service_type = PROCESSOR_SERVICE_TYPE,
+            //     end_version = ending_version,
+            //     start_version = starting_version,
+            //     "[Parser] Starting fetcher thread"
+            // );
 
             crate::grpc_stream::create_fetcher_loop(
                 tx.clone(),
@@ -268,13 +268,13 @@ impl Worker {
         // 4. We have not received anything in X seconds, we should panic.
         // 5. If it's the wrong chain, panic.
 
-        info!(
-            processor_name = processor_name,
-            service_type = PROCESSOR_SERVICE_TYPE,
-            stream_address = self.indexer_grpc_data_service_address.as_str(),
-            concurrent_tasks,
-            "[Parser] Spawning concurrent parallel processor tasks",
-        );
+        // info!(
+        //     processor_name = processor_name,
+        //     service_type = PROCESSOR_SERVICE_TYPE,
+        //     stream_address = self.indexer_grpc_data_service_address.as_str(),
+        //     concurrent_tasks,
+        //     "[Parser] Spawning concurrent parallel processor tasks",
+        // );
 
         let mut processor_tasks = vec![fetcher_task];
         for task_index in 0..concurrent_tasks {
@@ -284,13 +284,13 @@ impl Worker {
             processor_tasks.push(join_handle);
         }
 
-        info!(
-            processor_name = processor_name,
-            service_type = PROCESSOR_SERVICE_TYPE,
-            stream_address = self.indexer_grpc_data_service_address.as_str(),
-            concurrent_tasks,
-            "[Parser] Processor tasks spawned",
-        );
+        // info!(
+        //     processor_name = processor_name,
+        //     service_type = PROCESSOR_SERVICE_TYPE,
+        //     stream_address = self.indexer_grpc_data_service_address.as_str(),
+        //     concurrent_tasks,
+        //     "[Parser] Processor tasks spawned",
+        // );
 
         // Await the processor tasks: this is forever
         futures::future::try_join_all(processor_tasks)
@@ -593,10 +593,10 @@ impl Worker {
     /// Verify the chain id from GRPC against the database.
     pub async fn check_or_update_chain_id(&self, grpc_chain_id: i64) -> Result<u64> {
         let processor_name = self.processor_config.name();
-        info!(
-            processor_name = processor_name,
-            "[Parser] Checking if chain id is correct"
-        );
+        // info!(
+        //     processor_name = processor_name,
+        //     "[Parser] Checking if chain id is correct"
+        // );
         let mut conn = self.db_pool.get().await?;
 
         let maybe_existing_chain_id = LedgerInfo::get(&mut conn).await?.map(|li| li.chain_id);
@@ -604,19 +604,19 @@ impl Worker {
         match maybe_existing_chain_id {
             Some(chain_id) => {
                 anyhow::ensure!(chain_id == grpc_chain_id, "[Parser] Wrong chain detected! Trying to index chain {} now but existing data is for chain {}", grpc_chain_id, chain_id);
-                info!(
-                    processor_name = processor_name,
-                    chain_id = chain_id,
-                    "[Parser] Chain id matches! Continue to index...",
-                );
+                // info!(
+                //     processor_name = processor_name,
+                //     chain_id = chain_id,
+                //     "[Parser] Chain id matches! Continue to index...",
+                // );
                 Ok(chain_id as u64)
             },
             None => {
-                info!(
-                    processor_name = processor_name,
-                    chain_id = grpc_chain_id,
-                    "[Parser] Adding chain id to db, continue to index..."
-                );
+                // info!(
+                //     processor_name = processor_name,
+                //     chain_id = grpc_chain_id,
+                //     "[Parser] Adding chain id to db, continue to index..."
+                // );
                 execute_with_better_error_conn(
                     &mut conn,
                     diesel::insert_into(ledger_infos::table)
@@ -701,14 +701,14 @@ pub async fn do_processor(
         .inc();
 
     if enable_verbose_logging {
-        info!(
-            processor_name = processor_name,
-            service_type = PROCESSOR_SERVICE_TYPE,
-            start_version,
-            end_version,
-            size_in_bytes = transactions_pb.size_in_bytes,
-            "[Parser] Started processing one batch of transactions"
-        );
+        // info!(
+        //     processor_name = processor_name,
+        //     service_type = PROCESSOR_SERVICE_TYPE,
+        //     start_version,
+        //     end_version,
+        //     size_in_bytes = transactions_pb.size_in_bytes,
+        //     "[Parser] Started processing one batch of transactions"
+        // );
     }
     let cloned_transactions = transactions_pb.transactions.clone();
     let processed_result = processor
