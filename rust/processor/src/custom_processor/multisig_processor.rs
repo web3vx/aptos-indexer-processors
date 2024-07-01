@@ -325,6 +325,7 @@ impl CustomProcessorTrait for MultisigProcessor {
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
+                            info!("Processing Transaction Version {:?}",txn.version);
                             handle_create_transaction_event(
                                 self,
                                 event,
@@ -335,7 +336,12 @@ impl CustomProcessorTrait for MultisigProcessor {
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
                         | "0x1::multisig_account::TransactionExecutionSucceededEvent"
                         | "0x1::multisig_account::TransactionExecutionFailedEvent" => {
-                            handle_transaction_status_event(self, event, txn.clone().timestamp.unwrap().seconds).await?;
+                            handle_transaction_status_event(
+                                self,
+                                event,
+                                txn.clone().timestamp.unwrap().seconds,
+                            )
+                            .await?;
                         },
                         "0x1::multisig_account::VoteEvent" => {
                             handle_vote_event(self, event, txn.clone().timestamp.unwrap().seconds)
@@ -467,14 +473,28 @@ async fn handle_create_transaction_event(
     event: &Event,
     timestamp: i64,
 ) -> anyhow::Result<()> {
-    info!("Processing CreateTransactionEvent");
-    info!("Event data: {}", event.data);
-    let event_data: Value = serde_json::from_str(&event.data)?;
-    let decoded_payload = decode_event_payload(&event_data)?;
-    let payload_parsed = parse_payload(&decoded_payload)?;
-    let json_payload = process_entry_function(&payload_parsed)
-        .await
-        .unwrap_or_else(|_| Value::Null);
+    let mut json_payload = Value::Null;
+    let event_data: Value = serde_json::from_str(&event.data).unwrap_or_else(|_| {
+        tracing::warn!("Failed to parse event data as JSON.");
+        Value::Null
+    });
+    let decoded_payload = decode_event_payload(&event_data).unwrap_or_else(|_| Vec::new());
+    if decoded_payload.len() > 0 {
+        let payload_parsed = parse_payload(&decoded_payload);
+        match payload_parsed {
+            Ok(payload) => {
+                json_payload = process_entry_function(&payload)
+                    .await
+                    .unwrap_or_else(|_| Value::Null);
+            },
+            Err(e) => {
+                tracing::warn!("Error parsing payload: {:?}", e);
+            },
+        }
+    } else {
+        json_payload = event_data["transaction"]["payload"].clone();
+    }
+
     let multisig_transaction = MultisigTransaction {
         wallet_address: standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
         sequence_number: event_data["sequence_number"]
@@ -489,7 +509,7 @@ async fn handle_create_transaction_event(
         executor: None,
         executed_at: None,
     };
-    info!("Custom Processing transactions: {:?}",multisig_transaction);
+    info!("Custom Processing transactions: {:?}", multisig_transaction);
     insert_to_transaction_db(
         &processor.get_pool(),
         &[multisig_transaction],

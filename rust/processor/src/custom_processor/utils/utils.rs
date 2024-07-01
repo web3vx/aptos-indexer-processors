@@ -18,8 +18,12 @@ pub fn decode_event_payload(event_data: &Value) -> anyhow::Result<Vec<u8>> {
         .ok_or(anyhow::anyhow!("Payload vector missing"))?
         .get(0)
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Payload string missing"))?;
-    hex::decode(payload_str.strip_prefix("0x").unwrap_or(payload_str)).map_err(anyhow::Error::new)
+        .ok_or_else(|| anyhow::anyhow!("Payload string missing"));
+    match payload_str {
+        Ok(payload_str) => hex::decode(payload_str.strip_prefix("0x").unwrap_or(payload_str)).map_err(anyhow::Error::new),
+        Err(e) => Err(e),
+    }
+
 }
 
 pub fn parse_payload(payload: &[u8]) -> anyhow::Result<MultisigTransactionPayload> {
