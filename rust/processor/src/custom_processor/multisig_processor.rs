@@ -467,6 +467,7 @@ async fn handle_create_transaction_event(
     event: &Event,
     timestamp: i64,
 ) -> anyhow::Result<()> {
+    info!("Processing CreateTransactionEvent");
     let event_data: Value = serde_json::from_str(&event.data)?;
     let decoded_payload = decode_event_payload(&event_data)?;
     let payload_parsed = parse_payload(&decoded_payload)?;
@@ -487,6 +488,7 @@ async fn handle_create_transaction_event(
         executor: None,
         executed_at: None,
     };
+    info!("Custom Processing transactions: {:?}",multisig_transaction);
     insert_to_transaction_db(
         &processor.get_pool(),
         &[multisig_transaction],

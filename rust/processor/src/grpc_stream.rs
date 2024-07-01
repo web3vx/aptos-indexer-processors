@@ -80,14 +80,14 @@ pub async fn get_stream(
     auth_token: String,
     processor_name: String,
 ) -> Response<Streaming<TransactionsResponse>> {
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        start_version = starting_version,
-        end_version = ending_version,
-        "[Parser] Setting up rpc channel"
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     start_version = starting_version,
+    //     end_version = ending_version,
+    //     "[Parser] Setting up rpc channel"
+    // );
 
     let channel = tonic::transport::Channel::from_shared(
         indexer_grpc_data_service_address.to_string(),
@@ -108,14 +108,14 @@ pub async fn get_stream(
         channel
     };
 
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        start_version = starting_version,
-        end_version = ending_version,
-        "[Parser] Setting up GRPC client"
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     start_version = starting_version,
+    //     end_version = ending_version,
+    //     "[Parser] Setting up GRPC client"
+    // );
 
     // TODO: move this to a config file
     // Retry this connection a few times before giving up
@@ -169,15 +169,15 @@ pub async fn get_stream(
         },
     };
     let count = ending_version.map(|v| (v as i64 - starting_version as i64 + 1) as u64);
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        start_version = starting_version,
-        end_version = ending_version,
-        num_of_transactions = ?count,
-        "[Parser] Setting up GRPC stream",
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     start_version = starting_version,
+    //     end_version = ending_version,
+    //     num_of_transactions = ?count,
+    //     "[Parser] Setting up GRPC stream",
+    // );
 
     // TODO: move this to a config file
     // Retry this connection a few times before giving up
@@ -240,12 +240,12 @@ pub async fn get_chain_id(
     auth_token: String,
     processor_name: String,
 ) -> u64 {
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        "[Parser] Connecting to GRPC stream to get chain id",
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     "[Parser] Connecting to GRPC stream to get chain id",
+    // );
     let response = get_stream(
         indexer_grpc_data_service_address.clone(),
         indexer_grpc_http2_ping_interval,
@@ -262,13 +262,13 @@ pub async fn get_chain_id(
         None => "".to_string(),
     };
     let mut resp_stream = response.into_inner();
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        connection_id,
-        "[Parser] Successfully connected to GRPC stream to get chain id",
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     connection_id,
+    //     "[Parser] Successfully connected to GRPC stream to get chain id",
+    // );
 
     match resp_stream.next().await {
         Some(Ok(r)) => r.chain_id.expect("[Parser] Chain Id doesn't exist."),
@@ -317,14 +317,14 @@ pub async fn create_fetcher_loop(
     // The number of transactions per protobuf batch
     pb_channel_txn_chunk_size: usize,
 ) {
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        start_version = starting_version,
-        end_version = request_ending_version,
-        "[Parser] Connecting to GRPC stream",
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     start_version = starting_version,
+    //     end_version = request_ending_version,
+    //     "[Parser] Connecting to GRPC stream",
+    // );
     let mut response = get_stream(
         indexer_grpc_data_service_address.clone(),
         indexer_grpc_http2_ping_interval,
@@ -341,15 +341,15 @@ pub async fn create_fetcher_loop(
         None => "".to_string(),
     };
     let mut resp_stream = response.into_inner();
-    info!(
-        processor_name = processor_name,
-        service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
-        stream_address = indexer_grpc_data_service_address.to_string(),
-        connection_id,
-        start_version = starting_version,
-        end_version = request_ending_version,
-        "[Parser] Successfully connected to GRPC stream",
-    );
+    // info!(
+    //     processor_name = processor_name,
+    //     service_type = crate::worker::PROCESSOR_SERVICE_TYPE,
+    //     stream_address = indexer_grpc_data_service_address.to_string(),
+    //     connection_id,
+    //     start_version = starting_version,
+    //     end_version = request_ending_version,
+    //     "[Parser] Successfully connected to GRPC stream",
+    // );
 
     let mut grpc_channel_recv_latency = std::time::Instant::now();
     let mut next_version_to_fetch = starting_version;
