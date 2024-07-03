@@ -25,7 +25,7 @@ use crate::models::multisig_transaction_models::multisig_transaction::{
 };
 use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
 use crate::schema::multisig_transactions::{
-    executed_at, executor, sequence_number, status, wallet_address,
+    executed_at, executor, payload, sequence_number, status, wallet_address,
 };
 use crate::utils::database::execute_with_better_error;
 use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
@@ -153,6 +153,7 @@ async fn update_transaction_status(
     new_status: i32,
     new_executor: Option<String>,
     new_executed_at: Option<NaiveDateTime>,
+    transaction_payload: &str,
 ) -> anyhow::Result<()> {
     execute_with_better_error(
         pool.clone(),
@@ -161,6 +162,8 @@ async fn update_transaction_status(
                 status.eq(new_status),
                 executor.eq(new_executor),
                 executed_at.eq(new_executed_at),
+                payload
+                    .eq(serde_json::from_str(transaction_payload).unwrap_or_else(|_| Value::Null)),
             ))
             .filter(
                 wallet_address
@@ -325,7 +328,7 @@ impl CustomProcessorTrait for MultisigProcessor {
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
-                            info!("Processing Transaction Version {:?}",txn.version);
+                            info!("Processing Transaction Version {:?}", txn.version);
                             handle_create_transaction_event(
                                 self,
                                 event,
@@ -437,13 +440,41 @@ async fn handle_transaction_status_event(
     let mut new_executor = None;
     let mut new_executed_at = None;
     let mut new_status: i32 = TransactionStatus::Pending as i32;
+    let mut transaction_payload = String::new();
     match event.type_str.as_str() {
         "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
             new_status = TransactionStatus::Rejected as i32;
         },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
             new_status = TransactionStatus::Success as i32;
-            new_executor = Some(event_data["executor"].as_str().unwrap().to_string());
+            if let Some(executor_str) = event_data["executor"].as_str() {
+                new_executor = Some(executor_str.to_string());
+            }
+            transaction_payload = event_data["transaction_payload"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+
+            let decoded_payload = hex::decode(
+                transaction_payload
+                    .strip_prefix("0x")
+                    .unwrap_or(&transaction_payload),
+            )
+            .unwrap_or_default();
+
+            if !decoded_payload.is_empty() {
+                match parse_payload(&decoded_payload) {
+                    Ok(multisig_transaction_payload) => {
+                        transaction_payload = process_entry_function(&multisig_transaction_payload)
+                            .await
+                            .unwrap_or_else(|_| Value::Null)
+                            .to_string();
+                    },
+                    Err(e) => {
+                        tracing::warn!("Error parsing payload: {:?}", e);
+                    },
+                }
+            }
             new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
         },
         "0x1::multisig_account::TransactionExecutionFailedEvent" => {
@@ -462,6 +493,7 @@ async fn handle_transaction_status_event(
         new_status,
         new_executor,
         new_executed_at,
+        &transaction_payload,
     )
     .await?;
 
@@ -478,12 +510,12 @@ async fn handle_create_transaction_event(
         Value::Null
     });
     let mut json_payload = event_data["transaction"]["payload"].clone();
-    let decoded_payload = decode_event_payload(&event_data).unwrap_or_else(|_| Vec::new());
-    if decoded_payload.len() > 0 {
-        let payload_parsed = parse_payload(&decoded_payload);
-        match payload_parsed {
-            Ok(payload) => {
-                json_payload = process_entry_function(&payload)
+    let decoded_payload = decode_event_payload(&event_data).unwrap_or_default();
+
+    if !decoded_payload.is_empty() {
+        match parse_payload(&decoded_payload) {
+            Ok(multisig_transaction_payload) => {
+                json_payload = process_entry_function(&multisig_transaction_payload)
                     .await
                     .unwrap_or_else(|_| Value::Null);
             },
