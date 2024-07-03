@@ -473,11 +473,11 @@ async fn handle_create_transaction_event(
     event: &Event,
     timestamp: i64,
 ) -> anyhow::Result<()> {
-    let mut json_payload = Value::Null;
     let event_data: Value = serde_json::from_str(&event.data).unwrap_or_else(|_| {
         tracing::warn!("Failed to parse event data as JSON.");
         Value::Null
     });
+    let mut json_payload = event_data["transaction"]["payload"].clone();
     let decoded_payload = decode_event_payload(&event_data).unwrap_or_else(|_| Vec::new());
     if decoded_payload.len() > 0 {
         let payload_parsed = parse_payload(&decoded_payload);
@@ -491,8 +491,6 @@ async fn handle_create_transaction_event(
                 tracing::warn!("Error parsing payload: {:?}", e);
             },
         }
-    } else {
-        json_payload = event_data["transaction"]["payload"].clone();
     }
 
     let multisig_transaction = MultisigTransaction {
