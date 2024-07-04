@@ -447,9 +447,7 @@ async fn handle_transaction_status_event(
         },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
             new_status = TransactionStatus::Success as i32;
-            if let Some(executor_str) = event_data["executor"].as_str() {
-                new_executor = Some(executor_str.to_string());
-            }
+
             transaction_payload = event_data["transaction_payload"]
                 .as_str()
                 .unwrap_or("")
@@ -475,13 +473,16 @@ async fn handle_transaction_status_event(
                     },
                 }
             }
-            new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
         },
         "0x1::multisig_account::TransactionExecutionFailedEvent" => {
             new_status = TransactionStatus::Failed as i32
         },
         _ => {},
     };
+    if let Some(executor_str) = event_data["executor"].as_str() {
+        new_executor = Some(executor_str.to_string());
+    }
+    new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
 
     update_transaction_status(
         &processor.get_pool(),
