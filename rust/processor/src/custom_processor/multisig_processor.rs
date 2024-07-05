@@ -27,6 +27,7 @@ use crate::models::multisig_voting_transaction_models::multisig_voting_transacti
 use crate::schema::multisig_transactions::{
     executed_at, executor, payload, sequence_number, status, wallet_address,
 };
+use crate::schema::owners_wallets::owner_address;
 use crate::utils::database::execute_with_better_error;
 use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 use crate::{
@@ -143,6 +144,23 @@ async fn insert_to_votes_db(
         ),
     )
     .await?;
+    Ok(())
+}
+
+async fn remove_owners_db(
+    pool: &PgDbPool,
+    owners: Vec<&str>,
+    from_wallet_address: &str,
+) -> Result<(), diesel::result::Error> {
+    execute_with_better_error(
+        pool.clone(),
+        diesel::delete(schema::owners_wallets::table)
+            .filter(owner_address.eq_any(owners))
+            .filter(crate::schema::owners_wallets::wallet_address.eq(from_wallet_address)),
+        None,
+    )
+    .await?;
+
     Ok(())
 }
 
@@ -335,6 +353,12 @@ impl CustomProcessorTrait for MultisigProcessor {
                                 txn.clone().timestamp.unwrap().seconds,
                             )
                             .await?;
+                        },
+                        "0x1::multisig_account::RemoveOwnersEvent" => {
+                            handle_remove_owners(self, event).await?;
+                        },
+                        "0x1::multisig_account::AddOwnersEvent" => {
+                            handle_add_owners(self, event, &self.per_table_chunk_sizes).await?;
                         },
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
                         | "0x1::multisig_account::TransactionExecutionSucceededEvent"
@@ -540,7 +564,6 @@ async fn handle_create_transaction_event(
         executor: None,
         executed_at: None,
     };
-    info!("Custom Processing transactions: {:?}", multisig_transaction);
     insert_to_transaction_db(
         &processor.get_pool(),
         &[multisig_transaction],
@@ -580,5 +603,45 @@ async fn process_votes(
         )
         .await?;
     }
+    Ok(())
+}
+
+async fn handle_remove_owners(processor: &MultisigProcessor, event: &Event) -> anyhow::Result<()> {
+    let event_data: Value = serde_json::from_str(&event.data)?;
+    let owners_array = event_data["owners_removed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|owner| owner.as_str().unwrap_or_default())
+        .collect::<Vec<&str>>();
+
+    let from_wallet_address =
+        standardize_address(event.key.as_ref().unwrap().account_address.as_str());
+    remove_owners_db(&processor.get_pool(), owners_array, &from_wallet_address).await?;
+
+    Ok(())
+}
+
+async fn handle_add_owners(
+    processor: &MultisigProcessor,
+    event: &Event,
+    per_table_chunk_sizes: &AHashMap<String, usize>,
+) -> anyhow::Result<()> {
+    let event_data: Value = serde_json::from_str(&event.data)?;
+    let from_wallet_address =
+        standardize_address(event.key.as_ref().unwrap().account_address.as_str());
+    let owner_wallets = event_data["owners_added"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry_owner_address| OwnersWallet {
+            owner_address: entry_owner_address.to_string(),
+            wallet_address: from_wallet_address.clone(),
+            created_at: Utc::now().naive_utc(),
+        })
+        .collect::<Vec<OwnersWallet>>();
+
+    insert_to_owner_wallet_db(&processor.get_pool(), &owner_wallets, per_table_chunk_sizes).await?;
+
     Ok(())
 }
