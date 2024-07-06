@@ -301,8 +301,8 @@ impl CustomProcessorTrait for MultisigProcessor {
         _end_version: u64,
         _: Option<u64>,
     ) -> anyhow::Result<()> {
-
         for txn in &transactions {
+            info!("Receiving transactions version {:?}", txn.version);
             let txn_version = txn.version as i64;
             let txn_data = match txn.txn_data.as_ref() {
                 Some(data) => data,
@@ -341,8 +341,6 @@ impl CustomProcessorTrait for MultisigProcessor {
                     )
                     .await?;
                 }
-                info!("Receiving transactions version {:?}", txn.version);
-                info!("Transaction data {:?}", txn_data);
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
