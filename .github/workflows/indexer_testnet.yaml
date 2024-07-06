@@ -11,9 +11,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - run: |
-          # docker stop indexer_testnet
-          # docker rm indexer_testnet
-          # docker rmi indexer_testnet
+          docker stop indexer_testnet
+          docker rm indexer_testnet
+          docker rmi indexer_testnet
           docker builder prune --all -f
           cd rust
           echo "${{ secrets.ENV_FILE_INDEXER_TESTNET }}" >> config.yaml
