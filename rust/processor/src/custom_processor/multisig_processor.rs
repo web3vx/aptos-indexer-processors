@@ -303,7 +303,6 @@ impl CustomProcessorTrait for MultisigProcessor {
     ) -> anyhow::Result<()> {
 
         for txn in &transactions {
-            info!("Receiving transactions version {:?}", txn.version);
             let txn_version = txn.version as i64;
             let txn_data = match txn.txn_data.as_ref() {
                 Some(data) => data,
@@ -342,7 +341,8 @@ impl CustomProcessorTrait for MultisigProcessor {
                     )
                     .await?;
                 }
-
+                info!("Receiving transactions version {:?}", txn.version);
+                info!("Transaction data {:?}", txn_data);
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
@@ -459,6 +459,7 @@ async fn handle_transaction_status_event(
     event: &Event,
     timestamp: i64,
 ) -> anyhow::Result<()> {
+    info!("Processing Update Transaction Status {:?}", &event.data);
     let event_data: Value = serde_json::from_str(&event.data)?;
     let mut new_executor = None;
     let mut new_executed_at = None;
@@ -529,6 +530,7 @@ async fn handle_create_transaction_event(
     event: &Event,
     timestamp: i64,
 ) -> anyhow::Result<()> {
+    info!("Processing CreateTransactionEvent {:?}", &event.data);
     let event_data: Value = serde_json::from_str(&event.data).unwrap_or_else(|_| {
         tracing::warn!("Failed to parse event data as JSON.");
         Value::Null
@@ -580,6 +582,8 @@ async fn process_votes(
     event_data: &Value,
     timestamp: i64,
 ) -> anyhow::Result<()> {
+    info!("Processing Vote Transaction {:?}", &event.data);
+
     let vote_array = event_data["transaction"]["votes"]["data"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("Votes data missing"))?;
@@ -607,6 +611,8 @@ async fn process_votes(
 }
 
 async fn handle_remove_owners(processor: &MultisigProcessor, event: &Event) -> anyhow::Result<()> {
+    info!("Processing remove owner {:?}", &event.data);
+
     let event_data: Value = serde_json::from_str(&event.data)?;
     let owners_array = event_data["owners_removed"]
         .as_array()
@@ -627,6 +633,7 @@ async fn handle_add_owners(
     event: &Event,
     per_table_chunk_sizes: &AHashMap<String, usize>,
 ) -> anyhow::Result<()> {
+    info!("Processing Add owner {:?}", &event.data);
     let event_data: Value = serde_json::from_str(&event.data)?;
     let from_wallet_address =
         standardize_address(event.key.as_ref().unwrap().account_address.as_str());
