@@ -564,6 +564,7 @@ async fn handle_create_transaction_event(
         executor: None,
         executed_at: None,
     };
+    info!("Custom Processing transactions: {:?}", multisig_transaction);
     insert_to_transaction_db(
         &processor.get_pool(),
         &[multisig_transaction],
