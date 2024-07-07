@@ -302,7 +302,6 @@ impl CustomProcessorTrait for MultisigProcessor {
         _: Option<u64>,
     ) -> anyhow::Result<()> {
         for txn in &transactions {
-            info!("Receiving transactions version {:?}", txn.version);
             let txn_version = txn.version as i64;
             let txn_data = match txn.txn_data.as_ref() {
                 Some(data) => data,
@@ -344,6 +343,7 @@ impl CustomProcessorTrait for MultisigProcessor {
                 for event in raw_event {
                     match event.type_str.as_str() {
                         "0x1::multisig_account::CreateTransactionEvent" => {
+                            info!("CreateTransactionEvent: transactions version {:?}", txn.version);
                             handle_create_transaction_event(
                                 self,
                                 event,
@@ -352,14 +352,17 @@ impl CustomProcessorTrait for MultisigProcessor {
                             .await?;
                         },
                         "0x1::multisig_account::RemoveOwnersEvent" => {
+                            info!("RemoveOwnersEvent: transactions version {:?}", txn.version);
                             handle_remove_owners(self, event).await?;
                         },
                         "0x1::multisig_account::AddOwnersEvent" => {
+                            info!("RemoveOwnersEvent: transactions version {:?}", txn.version);
                             handle_add_owners(self, event, &self.per_table_chunk_sizes).await?;
                         },
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
                         | "0x1::multisig_account::TransactionExecutionSucceededEvent"
                         | "0x1::multisig_account::TransactionExecutionFailedEvent" => {
+                            info!("Changes status transactions: transactions version {:?}", txn.version);
                             handle_transaction_status_event(
                                 self,
                                 event,
@@ -368,6 +371,7 @@ impl CustomProcessorTrait for MultisigProcessor {
                             .await?;
                         },
                         "0x1::multisig_account::VoteEvent" => {
+                            info!("VoteEvent: transactions version {:?}", txn.version);
                             handle_vote_event(self, event, txn.clone().timestamp.unwrap().seconds)
                                 .await?;
                         },
