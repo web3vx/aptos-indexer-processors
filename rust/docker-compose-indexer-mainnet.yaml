@@ -6,8 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: indexer_testnet
-    container_name: indexer_testnet
+    image: indexer_mainnet
+    container_name: indexer_mainnet
     volumes:
       - ./config.yaml:/config.yaml
     command: -c ./config.yaml
