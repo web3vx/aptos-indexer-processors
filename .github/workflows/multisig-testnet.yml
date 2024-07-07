@@ -6,19 +6,17 @@ on:
       - "features/implement-multisig-transaction-testnet"
 jobs:
   deploy:
-    runs-on: multisig-testnet # 236416
+    runs-on: multisig-testnet # 2658037
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - run: |
-          docker stop multisig-testnet
-          docker rm multisig-testnet
-          docker rmi multisig-testnet
-          docker builder prune --all -f
           cd rust
+          docker compose --project-name multisig-testnet -f docker-compose-multisig-testnet.yaml down || true
+          docker rmi multisig-testnet || true
+          docker builder prune --all -f
           echo "${{ secrets.ENV_FILE_MULTISIG_TESTNET }}" >> config.yaml
-          docker build . -t multisig-testnet
-          docker run --name multisig-testnet -d --restart=always -it --mount type=bind,source=./config.yaml,target=/config.yaml multisig-testnet -c /config.yaml
+          docker compose --project-name multisig-testnet -f docker-compose-multisig-testnet.yaml up -d
           # Remove the last line from the config.yaml file (start_ver)
           sed -i '$ d' config.yaml
           docker image prune -f
