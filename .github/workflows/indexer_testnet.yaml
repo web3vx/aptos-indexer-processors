@@ -6,7 +6,7 @@ on:
       - "main_testnet"
 jobs:
   deploy:
-    runs-on: indexer_testnet # 2077489
+    runs-on: indexer_testnet # 2407945
     steps:
       - name: Checkout
         uses: actions/checkout@v3
