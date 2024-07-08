@@ -166,18 +166,7 @@ impl Worker {
                 );
                 0
             });
-        let starting_version_from_db = self
-            .get_custom_processor_start_version()
-            .await
-            .expect("[Parser] Database error when getting starting version")
-            .unwrap_or_else(|| {
-                info!(
-                    processor_name = processor_name,
-                    service_type = PROCESSOR_SERVICE_TYPE,
-                    "[Parser] No starting version from db so custom indexer starting from version 0"
-                );
-                0
-            });
+
         let starting_version = self.starting_version.unwrap_or(starting_version_from_db);
 
         // info!(
