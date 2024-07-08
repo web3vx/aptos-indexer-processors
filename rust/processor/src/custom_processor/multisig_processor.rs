@@ -302,7 +302,12 @@ impl CustomProcessorTrait for MultisigProcessor {
         _: Option<u64>,
     ) -> anyhow::Result<()> {
         for txn in &transactions {
+            info!(
+                "transactions version {:?}",
+                txn.version
+            );
             let txn_version = txn.version as i64;
+
             let txn_data = match txn.txn_data.as_ref() {
                 Some(data) => data,
                 None => {
@@ -624,7 +629,8 @@ async fn handle_remove_owners(processor: &MultisigProcessor, event: &Event) -> a
     let event_data: Value = serde_json::from_str(&event.data)?;
     let owners_array = event_data["owners_removed"].as_array();
     if owners_array.is_some() {
-        let owners = owners_array.unwrap()
+        let owners = owners_array
+            .unwrap()
             .iter()
             .map(|owner| owner.as_str().unwrap_or_default())
             .collect::<Vec<&str>>();
