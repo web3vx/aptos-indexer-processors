@@ -166,7 +166,18 @@ impl Worker {
                 );
                 0
             });
-
+        let starting_version_from_db = self
+            .get_custom_processor_start_version()
+            .await
+            .expect("[Parser] Database error when getting starting version")
+            .unwrap_or_else(|| {
+                info!(
+                    processor_name = processor_name,
+                    service_type = PROCESSOR_SERVICE_TYPE,
+                    "[Parser] No starting version from db so custom indexer starting from version 0"
+                );
+                0
+            });
         let starting_version = self.starting_version.unwrap_or(starting_version_from_db);
 
         // info!(
@@ -245,9 +256,16 @@ impl Worker {
         // Create a gap detector task that will panic if there is a gap in the processing
         let (gap_detector_sender, gap_detector_receiver) =
             kanal::bounded_async::<ProcessingResult>(BUFFER_SIZE);
+
         let gap_detection_batch_size = self.gap_detection_batch_size;
         let processor = build_processor(
             &self.processor_config,
+            self.per_table_chunk_sizes.clone(),
+            self.db_pool.clone(),
+        );
+
+        let custom_processor = build_custom_processor(
+            &self.custom_processor_config,
             self.per_table_chunk_sizes.clone(),
             self.db_pool.clone(),
         );
@@ -255,11 +273,13 @@ impl Worker {
             crate::gap_detector::create_gap_detector_status_tracker_loop(
                 gap_detector_receiver,
                 processor,
+                custom_processor,
                 starting_version,
                 gap_detection_batch_size,
             )
             .await;
         });
+
 
         // This is the consumer side of the channel. These are the major states:
         // 1. We're backfilling so we should expect many concurrent threads to process transactions
@@ -283,7 +303,12 @@ impl Worker {
                 .await;
             processor_tasks.push(join_handle);
         }
-
+        for task_index in 0..concurrent_tasks {
+            let join_handle = self
+                .launch_custom_processor_task(task_index, receiver.clone(), gap_detector_sender.clone())
+                .await;
+            processor_tasks.push(join_handle);
+        }
         // info!(
         //     processor_name = processor_name,
         //     service_type = PROCESSOR_SERVICE_TYPE,
@@ -296,6 +321,198 @@ impl Worker {
         futures::future::try_join_all(processor_tasks)
             .await
             .expect("[Processor] Processor tasks have died");
+    }
+
+    async fn launch_custom_processor_task(
+        &self,
+        task_index: usize,
+        receiver: kanal::AsyncReceiver<TransactionsPBResponse>,
+        gap_detector_sender: kanal::AsyncSender<ProcessingResult>,
+    ) -> JoinHandle<()> {
+        let processor_name = self.processor_config.name();
+        let stream_address = self.indexer_grpc_data_service_address.to_string();
+        let receiver_clone = receiver.clone();
+        let auth_token = self.auth_token.clone();
+
+
+        let custom_processor = build_custom_processor(
+            &self.custom_processor_config,
+            self.per_table_chunk_sizes.clone(),
+            self.db_pool.clone(),
+        );
+
+        let concurrent_tasks = self.number_concurrent_processing_tasks;
+
+        let chain_id = self
+            .grpc_chain_id
+            .expect("GRPC chain ID has not been fetched yet!");
+        tokio::spawn(async move {
+            let task_index_str = task_index.to_string();
+            let step = ProcessorStep::ProcessedBatch.get_step();
+            let label = ProcessorStep::ProcessedBatch.get_label();
+            let mut ma = MovingAverage::new(3000);
+
+            loop {
+                let txn_channel_fetch_latency = std::time::Instant::now();
+
+                match fetch_transactions(
+                    processor_name,
+                    &stream_address,
+                    receiver_clone.clone(),
+                    task_index,
+                )
+                    .await
+                {
+                    // Fetched transactions from channel
+                    Ok(transactions_pb) => {
+                        let size_in_bytes = transactions_pb.size_in_bytes as f64;
+                        let first_txn_version = transactions_pb
+                            .transactions
+                            .first()
+                            .map(|t| t.version)
+                            .unwrap_or_default();
+                        let batch_first_txn_version = transactions_pb.start_version;
+                        let last_txn_version = transactions_pb
+                            .transactions
+                            .last()
+                            .map(|t| t.version)
+                            .unwrap_or_default();
+                        let batch_last_txn_version = transactions_pb.end_version;
+                        let start_txn_timestamp = transactions_pb.start_txn_timestamp.clone();
+                        let end_txn_timestamp = transactions_pb.end_txn_timestamp.clone();
+
+                        let start_txn_timestamp_unix = start_txn_timestamp
+                            .as_ref()
+                            .map(timestamp_to_unixtime)
+                            .unwrap_or_default();
+                        let start_txn_timestamp_iso = start_txn_timestamp
+                            .as_ref()
+                            .map(timestamp_to_iso)
+                            .unwrap_or_default();
+                        let end_txn_timestamp_iso = end_txn_timestamp
+                            .as_ref()
+                            .map(timestamp_to_iso)
+                            .unwrap_or_default();
+
+                        let txn_channel_fetch_latency_sec =
+                            txn_channel_fetch_latency.elapsed().as_secs_f64();
+
+
+                        if transactions_pb.chain_id != chain_id {
+                            error!(
+                                processor_name = processor_name,
+                                stream_address = stream_address.as_str(),
+                                chain_id = transactions_pb.chain_id,
+                                existing_id = chain_id,
+                                task_index,
+                                "[Parser][T#{}] Stream somehow changed chain id!",
+                                task_index
+                            );
+                            panic!(
+                                "[Parser][T#{}] Stream somehow changed chain id!",
+                                task_index
+                            );
+                        }
+
+                        let processing_time = std::time::Instant::now();
+
+                        let res = do_custom_processor(
+                            transactions_pb,
+                            &custom_processor,
+                            chain_id,
+                            processor_name,
+                            &auth_token,
+                            false, // enable_verbose_logging
+                        )
+                            .await;
+
+                        let processing_result = match res {
+                            Ok(versions) => {
+                                PROCESSOR_SUCCESSES_COUNT
+                                    .with_label_values(&[processor_name])
+                                    .inc();
+                                versions
+                            },
+                            Err(e) => {
+                                error!(
+                                    processor_name = processor_name,
+                                    stream_address = stream_address.as_str(),
+                                    error = ?e,
+                                    task_index,
+                                    "[Parser][T#{}] Error processing transactions", task_index
+                                );
+                                PROCESSOR_ERRORS_COUNT
+                                    .with_label_values(&[processor_name])
+                                    .inc();
+                                panic!(
+                                    "[Parser][T#{}] Error processing '{:}' transactions: {:?}",
+                                    task_index, processor_name, e
+                                );
+                            },
+                        };
+
+                        let processing_time = processing_time.elapsed().as_secs_f64();
+
+                        // We've processed things: do some data and metrics
+
+                        ma.tick_now((last_txn_version - first_txn_version) + 1);
+                        let tps = ma.avg().ceil() as u64;
+
+                        let num_processed = (last_txn_version - first_txn_version) + 1;
+
+
+                        // TODO: For these three, do an atomic thing, or ideally move to an async metrics collector!
+                        GRPC_LATENCY_BY_PROCESSOR_IN_SECS
+                            .with_label_values(&[processor_name, &task_index_str])
+                            .set(time_diff_since_pb_timestamp_in_secs(
+                                end_txn_timestamp.as_ref().unwrap(),
+                            ));
+                        LATEST_PROCESSED_VERSION
+                            .with_label_values(&[processor_name, step, label, &task_index_str])
+                            .set(last_txn_version as i64);
+                        TRANSACTION_UNIX_TIMESTAMP
+                            .with_label_values(&[processor_name, step, label, &task_index_str])
+                            .set(start_txn_timestamp_unix);
+
+                        // Single batch metrics
+                        PROCESSED_BYTES_COUNT
+                            .with_label_values(&[processor_name, step, label, &task_index_str])
+                            .inc_by(size_in_bytes as u64);
+                        NUM_TRANSACTIONS_PROCESSED_COUNT
+                            .with_label_values(&[processor_name, step, label, &task_index_str])
+                            .inc_by(num_processed);
+
+                        SINGLE_BATCH_PROCESSING_TIME_IN_SECS
+                            .with_label_values(&[processor_name, &task_index_str])
+                            .set(processing_time);
+                        SINGLE_BATCH_PARSING_TIME_IN_SECS
+                            .with_label_values(&[processor_name, &task_index_str])
+                            .set(processing_result.processing_duration_in_secs);
+                        SINGLE_BATCH_DB_INSERTION_TIME_IN_SECS
+                            .with_label_values(&[processor_name, &task_index_str])
+                            .set(processing_result.db_insertion_duration_in_secs);
+
+                        // Send the result to the gap detector
+                        gap_detector_sender
+                            .send(processing_result)
+                            .await
+                            .expect("[Parser] Failed to send versions to gap detector");
+                    },
+                    // Could not fetch transactions from channel. This happens when there are
+                    // no more transactions to fetch and the channel is closed.
+                    Err(e) => {
+                        error!(
+                            processor_name = processor_name,
+                            stream_address = stream_address.as_str(),
+                            error = ?e,
+                            task_index,
+                            "[Parser][T#{}] Consumer thread exiting fetching loop", task_index
+                        );
+                        break;
+                    },
+                }
+            }
+        })
     }
 
     async fn launch_processor_task(
@@ -316,11 +533,11 @@ impl Worker {
             self.db_pool.clone(),
         );
 
-        let custom_processor = build_custom_processor(
-            &self.custom_processor_config,
-            self.per_table_chunk_sizes.clone(),
-            self.db_pool.clone(),
-        );
+        // let custom_processor = build_custom_processor(
+        //     &self.custom_processor_config,
+        //     self.per_table_chunk_sizes.clone(),
+        //     self.db_pool.clone(),
+        // );
 
         let concurrent_tasks = self.number_concurrent_processing_tasks;
 
@@ -417,7 +634,6 @@ impl Worker {
                         let res = do_processor(
                             transactions_pb,
                             &processor,
-                            &custom_processor,
                             chain_id,
                             processor_name,
                             &auth_token,
@@ -590,6 +806,18 @@ impl Worker {
         }
     }
 
+    pub async fn get_custom_processor_start_version(&self) -> Result<Option<u64>> {
+        let mut conn = self.db_pool.get().await?;
+
+        match ProcessorStatusQuery::get_by_processor(self.custom_processor_config.name(), &mut conn)
+            .await?
+        {
+            Some(status) => Ok(Some(status.last_success_version as u64 + 1)),
+            None => Ok(None),
+        }
+    }
+
+
     /// Verify the chain id from GRPC against the database.
     pub async fn check_or_update_chain_id(&self, grpc_chain_id: i64) -> Result<u64> {
         let processor_name = self.processor_config.name();
@@ -665,10 +893,61 @@ async fn fetch_transactions(
     }
 }
 
+pub async fn do_custom_processor(
+    transactions_pb: TransactionsPBResponse,
+    custom_processor: &CustomProcessor,
+    db_chain_id: u64,
+    processor_name: &str,
+    auth_token: &str,
+    enable_verbose_logging: bool,
+) -> Result<ProcessingResult> {
+    // We use the value passed from the `transactions_pb` as it may have been filtered
+    let start_version = transactions_pb.start_version;
+    let end_version = transactions_pb.end_version;
+
+    // Fake this as it's possible we have filtered out all of the txns in this batch
+    if transactions_pb.transactions.is_empty() {
+        return Ok(ProcessingResult {
+            start_version,
+            end_version,
+            processing_duration_in_secs: 0.0,
+            db_insertion_duration_in_secs: 0.0,
+            last_transaction_timestamp: transactions_pb.end_txn_timestamp,
+        });
+    }
+
+    let txn_time = transactions_pb.start_txn_timestamp;
+
+    if let Some(ref t) = txn_time {
+        PROCESSOR_DATA_RECEIVED_LATENCY_IN_SECS
+            .with_label_values(&[auth_token, processor_name])
+            .set(time_diff_since_pb_timestamp_in_secs(t));
+    }
+    PROCESSOR_INVOCATIONS_COUNT
+        .with_label_values(&[processor_name])
+        .inc();
+
+    let processed_result = custom_processor
+        .process_transactions(
+            transactions_pb.transactions,
+            start_version,
+            end_version,
+            Some(db_chain_id),
+        )
+        .await;
+
+    if let Some(ref t) = txn_time {
+        PROCESSOR_DATA_PROCESSED_LATENCY_IN_SECS
+            .with_label_values(&[auth_token, processor_name])
+            .set(time_diff_since_pb_timestamp_in_secs(t));
+    }
+
+    processed_result
+}
+
 pub async fn do_processor(
     transactions_pb: TransactionsPBResponse,
     processor: &Processor,
-    custom_processor: &CustomProcessor,
     db_chain_id: u64,
     processor_name: &str,
     auth_token: &str,
@@ -710,7 +989,6 @@ pub async fn do_processor(
         //     "[Parser] Started processing one batch of transactions"
         // );
     }
-    let cloned_transactions = transactions_pb.transactions.clone();
     let processed_result = processor
         .process_transactions(
             transactions_pb.transactions,
@@ -719,14 +997,7 @@ pub async fn do_processor(
             Some(db_chain_id),
         )
         .await;
-    let _ = custom_processor
-        .process_transactions(
-            cloned_transactions,
-            start_version,
-            end_version,
-            Some(db_chain_id),
-        )
-        .await;
+
 
     if let Some(ref t) = txn_time {
         PROCESSOR_DATA_PROCESSED_LATENCY_IN_SECS

@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 
 use ahash::AHashMap;
+use anyhow::bail;
 use aptos_protos::transaction::v1::write_set_change::Change;
 use aptos_protos::transaction::v1::{transaction::TxnData, Event, Transaction, WriteResource};
 use async_trait::async_trait;
@@ -14,6 +15,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods,
 };
 use serde_json::Value;
+use tracing::error;
 use tracing::log::info;
 
 use crate::custom_processor::utils::utils::{
@@ -24,6 +26,7 @@ use crate::models::multisig_transaction_models::multisig_transaction::{
     MultisigTransaction, TransactionStatus,
 };
 use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
+use crate::processors::ProcessingResult;
 use crate::schema::multisig_transactions::{
     executed_at, executor, payload, sequence_number, status, wallet_address,
 };
@@ -297,15 +300,15 @@ impl CustomProcessorTrait for MultisigProcessor {
     async fn process_transactions(
         &self,
         transactions: Vec<Transaction>,
-        _start_version: u64,
-        _end_version: u64,
+        start_version: u64,
+        end_version: u64,
         _: Option<u64>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<ProcessingResult> {
+        let processing_start = std::time::Instant::now();
+        let db_insertion_start = std::time::Instant::now();
+
         for txn in &transactions {
-            info!(
-                "transactions version {:?}",
-                txn.version
-            );
+            info!("transactions version {:?}", txn.version);
             let txn_version = txn.version as i64;
 
             let txn_data = match txn.txn_data.as_ref() {
@@ -391,7 +394,18 @@ impl CustomProcessorTrait for MultisigProcessor {
                 }
             }
         }
-        Ok(())
+
+        let last_transaction_timestamp = transactions.last().unwrap().timestamp.clone();
+        let processing_duration_in_secs = processing_start.elapsed().as_secs_f64();
+        let db_insertion_duration_in_secs = db_insertion_start.elapsed().as_secs_f64();
+
+        Ok(ProcessingResult {
+            start_version,
+            end_version,
+            processing_duration_in_secs,
+            db_insertion_duration_in_secs,
+            last_transaction_timestamp,
+        })
     }
 
     fn connection_pool(&self) -> &PgDbPool {

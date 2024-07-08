@@ -19,6 +19,7 @@ use crate::{
         util::parse_timestamp,
     },
 };
+use crate::processors::ProcessingResult;
 
 pub mod multisig_processor;
 pub mod serde_helper;
@@ -38,7 +39,7 @@ pub trait CustomProcessorTrait: Send + Sync + Debug {
         start_version: u64,
         end_version: u64,
         db_chain_id: Option<u64>,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<ProcessingResult>;
 
     /// Gets a reference to the connection pool
     /// This is used by the `get_conn()` helper below
