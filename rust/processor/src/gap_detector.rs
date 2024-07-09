@@ -71,12 +71,12 @@ impl GapDetector {
 
 pub async fn create_gap_detector_status_tracker_loop(
     gap_detector_receiver: AsyncReceiver<ProcessingResult>,
-    processor: Processor,
+    // processor: Processor,
     custom_processor: CustomProcessor,
     starting_version: u64,
     gap_detection_batch_size: u64,
 ) {
-    let processor_name = processor.name();
+    let processor_name = custom_processor.name();
     info!(
         processor_name = processor_name,
         service_type = PROCESSOR_SERVICE_TYPE,
@@ -117,13 +117,13 @@ pub async fn create_gap_detector_status_tracker_loop(
 
                 if let Some(res_last_success_batch) = res.last_success_batch {
                     if last_update_time.elapsed().as_secs() >= UPDATE_PROCESSOR_STATUS_SECS {
-                        processor
-                            .update_last_processed_version(
-                                res_last_success_batch.end_version,
-                                res_last_success_batch.last_transaction_timestamp.clone(),
-                            )
-                            .await
-                            .unwrap();
+                        // processor
+                        //     .update_last_processed_version(
+                        //         res_last_success_batch.end_version,
+                        //         res_last_success_batch.last_transaction_timestamp.clone(),
+                        //     )
+                        //     .await
+                        //     .unwrap();
                         custom_processor
                             .update_last_processed_version(
                                 res_last_success_batch.end_version,

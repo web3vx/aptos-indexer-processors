@@ -261,7 +261,7 @@ impl Worker {
         tokio::spawn(async move {
             crate::gap_detector::create_gap_detector_status_tracker_loop(
                 gap_detector_receiver,
-                processor,
+                // processor,
                 custom_processor,
                 starting_version,
                 gap_detection_batch_size,
@@ -286,12 +286,12 @@ impl Worker {
         // );
 
         let mut processor_tasks = vec![fetcher_task];
-        for task_index in 0..concurrent_tasks {
-            let join_handle = self
-                .launch_processor_task(task_index, receiver.clone(), gap_detector_sender.clone())
-                .await;
-            processor_tasks.push(join_handle);
-        }
+        // for task_index in 0..concurrent_tasks {
+        //     let join_handle = self
+        //         .launch_processor_task(task_index, receiver.clone(), gap_detector_sender.clone())
+        //         .await;
+        //     processor_tasks.push(join_handle);
+        // }
         for task_index in 0..concurrent_tasks {
             let join_handle = self
                 .launch_custom_processor_task(task_index, receiver.clone(), gap_detector_sender.clone())
@@ -318,7 +318,7 @@ impl Worker {
         receiver: kanal::AsyncReceiver<TransactionsPBResponse>,
         gap_detector_sender: kanal::AsyncSender<ProcessingResult>,
     ) -> JoinHandle<()> {
-        let processor_name = self.processor_config.name();
+        let processor_name = self.custom_processor_config.name();
         let stream_address = self.indexer_grpc_data_service_address.to_string();
         let receiver_clone = receiver.clone();
         let auth_token = self.auth_token.clone();

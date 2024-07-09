@@ -861,6 +861,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    multisig_contacts (owner_address, contact_address) {
+        #[max_length = 255]
+        owner_address -> Varchar,
+        #[max_length = 255]
+        contact_address -> Varchar,
+        #[max_length = 255]
+        contact_name -> Varchar,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     multisig_owners (owner_address) {
         #[max_length = 255]
         owner_address -> Varchar,
@@ -1302,7 +1314,6 @@ diesel::table! {
 
 diesel::joinable!(multisig_transactions -> multisig_owners (initiated_by));
 diesel::joinable!(multisig_transactions -> multisig_wallets (wallet_address));
-diesel::joinable!(multisig_voting_transactions -> multisig_owners (voter_address));
 diesel::joinable!(owners_wallets -> multisig_owners (owner_address));
 diesel::joinable!(owners_wallets -> multisig_wallets (wallet_address));
 
@@ -1352,6 +1363,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     ledger_infos,
     move_modules,
     move_resources,
+    multisig_contacts,
     multisig_owners,
     multisig_transactions,
     multisig_voting_transactions,
