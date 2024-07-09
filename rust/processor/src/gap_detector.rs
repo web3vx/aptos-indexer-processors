@@ -117,13 +117,7 @@ pub async fn create_gap_detector_status_tracker_loop(
 
                 if let Some(res_last_success_batch) = res.last_success_batch {
                     if last_update_time.elapsed().as_secs() >= UPDATE_PROCESSOR_STATUS_SECS {
-                        // processor
-                        //     .update_last_processed_version(
-                        //         res_last_success_batch.end_version,
-                        //         res_last_success_batch.last_transaction_timestamp.clone(),
-                        //     )
-                        //     .await
-                        //     .unwrap();
+
                         custom_processor
                             .update_last_processed_version(
                                 res_last_success_batch.end_version,
