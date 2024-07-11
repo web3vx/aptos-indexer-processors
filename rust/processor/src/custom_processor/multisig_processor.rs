@@ -12,9 +12,9 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
     pg::{upsert::excluded, Pg},
     query_builder::QueryFragment,
-    BoolExpressionMethods, ExpressionMethods,
+    BoolExpressionMethods, ExpressionMethods, QueryDsl,
 };
-use serde_json::Value;
+use serde_json::{to_string, Value};
 use tracing::error;
 use tracing::log::info;
 
@@ -31,6 +31,7 @@ use crate::schema::multisig_transactions::{
     executed_at, executor, payload, sequence_number, status, wallet_address,
 };
 use crate::schema::owners_wallets::owner_address;
+use crate::schema::{ledger_infos, multisig_transactions};
 use crate::utils::database::execute_with_better_error;
 use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 use crate::{
@@ -167,6 +168,15 @@ async fn remove_owners_db(
     Ok(())
 }
 
+#[derive(AsChangeset)]
+#[table_name = "multisig_transactions"]
+struct UpdateTransaction<'a> {
+    status: i32,
+    executor: Option<&'a str>,
+    executed_at: Option<NaiveDateTime>,
+    payload: Option<Value>,
+}
+
 async fn update_transaction_status(
     pool: &PgDbPool,
     filter_wallet_address: String,
@@ -176,24 +186,31 @@ async fn update_transaction_status(
     new_executed_at: Option<NaiveDateTime>,
     transaction_payload: &str,
 ) -> anyhow::Result<()> {
-    execute_with_better_error(
-        pool.clone(),
-        diesel::update(schema::multisig_transactions::table)
-            .set((
-                status.eq(new_status),
-                executor.eq(new_executor),
-                executed_at.eq(new_executed_at),
-                payload
-                    .eq(serde_json::from_str(transaction_payload).unwrap_or_else(|_| Value::Null)),
-            ))
-            .filter(
-                wallet_address
-                    .eq(filter_wallet_address)
-                    .and(sequence_number.eq(filter_sequence_number)),
-            ),
-        None,
-    )
-    .await?;
+    let target = schema::multisig_transactions::table.filter(
+        wallet_address
+            .eq(filter_wallet_address)
+            .and(sequence_number.eq(filter_sequence_number)),
+    );
+
+    let payload_value = if !transaction_payload.is_empty() {
+        serde_json::from_str(transaction_payload).unwrap_or_else(|_| Value::Null)
+    } else {
+        Value::Null
+    };
+
+    let update = UpdateTransaction {
+        status: new_status,
+        executor: new_executor.as_deref(),
+        executed_at: new_executed_at,
+        payload: if payload_value.is_null() {
+            None
+        } else {
+            Some(payload_value)
+        },
+    };
+
+    execute_with_better_error(pool.clone(), diesel::update(target).set(update), None).await?;
+
     Ok(())
 }
 
@@ -491,19 +508,27 @@ async fn handle_transaction_status_event(
     let mut new_executor = None;
     let mut new_executed_at = None;
     let mut new_status: i32 = TransactionStatus::Pending as i32;
-    let mut transaction_payload = String::new();
+    let mut transaction_payload = String::from("");
+    let filter_wallet_address =
+        standardize_address(event.key.as_ref().unwrap().account_address.as_str());
+    let filter_sequence_number = event_data["sequence_number"]
+        .as_str()
+        .unwrap_or("0")
+        .parse::<i32>()?;
+
     match event.type_str.as_str() {
         "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
             new_status = TransactionStatus::Rejected as i32;
         },
+        "0x1::multisig_account::TransactionExecutionFailedEvent" => {
+            new_status = TransactionStatus::Failed as i32
+        },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
-            new_status = TransactionStatus::Success as i32;
-
             transaction_payload = event_data["transaction_payload"]
                 .as_str()
-                .unwrap_or("")
+                .unwrap_or(&String::from(""))
                 .to_string();
-
+            new_status = TransactionStatus::Success as i32;
             let decoded_payload = hex::decode(
                 transaction_payload
                     .strip_prefix("0x")
@@ -516,7 +541,7 @@ async fn handle_transaction_status_event(
                     Ok(multisig_transaction_payload) => {
                         transaction_payload = process_entry_function(&multisig_transaction_payload)
                             .await
-                            .unwrap_or_else(|_| Value::Null)
+                            .unwrap_or(Value::String(String::from("")))
                             .to_string();
                     },
                     Err(e) => {
@@ -525,9 +550,7 @@ async fn handle_transaction_status_event(
                 }
             }
         },
-        "0x1::multisig_account::TransactionExecutionFailedEvent" => {
-            new_status = TransactionStatus::Failed as i32
-        },
+
         _ => {},
     };
     if let Some(executor_str) = event_data["executor"].as_str() {
@@ -537,11 +560,8 @@ async fn handle_transaction_status_event(
 
     update_transaction_status(
         &processor.get_pool(),
-        standardize_address(event.key.as_ref().unwrap().account_address.as_str()),
-        event_data["sequence_number"]
-            .as_str()
-            .unwrap_or("0")
-            .parse::<i32>()?,
+        filter_wallet_address,
+        filter_sequence_number,
         new_status,
         new_executor,
         new_executed_at,
