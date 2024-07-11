@@ -155,7 +155,7 @@ impl Worker {
         );
 
         let starting_version_from_db = self
-            .get_start_version()
+            .get_custom_processor_start_version()
             .await
             .expect("[Parser] Database error when getting starting version")
             .unwrap_or_else(|| {
