@@ -658,8 +658,6 @@ async fn process_votes(
 }
 
 async fn handle_remove_owners(processor: &MultisigProcessor, event: &Event) -> anyhow::Result<()> {
-    info!("Processing remove owner {:?}", &event.data);
-
     let event_data: Value = serde_json::from_str(&event.data)?;
     let owners_array = event_data["owners_removed"].as_array();
     if owners_array.is_some() {
@@ -682,7 +680,6 @@ async fn handle_add_owners(
     event: &Event,
     per_table_chunk_sizes: &AHashMap<String, usize>,
 ) -> anyhow::Result<()> {
-    info!("Processing Add owner {:?}", &event.data);
     let event_data: Value = serde_json::from_str(&event.data)?;
     let from_wallet_address =
         standardize_address(event.key.as_ref().unwrap().account_address.as_str());

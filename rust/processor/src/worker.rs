@@ -168,7 +168,7 @@ impl Worker {
             });
 
         let starting_version = self.starting_version.unwrap_or(starting_version_from_db);
-
+        info!(starting_version, "[Parser] Starting version");
         // info!(
         //     processor_name = processor_name,
         //     service_type = PROCESSOR_SERVICE_TYPE,
