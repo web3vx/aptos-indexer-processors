@@ -1,0 +1,22 @@
+name: Deploy Indexer Mainnet to Indexer VM
+run-name: ${{ github.actor }} is deploying Indexer Mainnet to Indexer VM
+on:
+  push:
+    branches:
+      - "coin_mainnet"
+jobs:
+  deploy:
+    runs-on: coin_mainnet # 3548184
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - run: |
+          cd rust
+          docker compose --project-name coin_mainnet -f docker-compose-coin-mainnet.yaml down || true
+          docker rmi coin_mainnet || true
+          docker builder prune --all -f
+          echo "${{ secrets.ENV_FILE_COIN_MAINNET }}" >> config.yaml
+          docker compose --project-name coin_mainnet -f docker-compose-coin-mainnet.yaml up -d
+          # Remove the last line from the config.yaml file (start_ver)
+          # sed -i '$ d' config.yaml
+          docker image prune -f
