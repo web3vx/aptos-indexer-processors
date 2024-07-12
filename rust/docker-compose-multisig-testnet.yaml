@@ -8,7 +8,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: multisig-testnet
-    container_name: multisig-testnet
+    container_name: multisig-lastest-transaction-testnet
     volumes:
       - ./config.yaml:/config.yaml
     command: -c ./config.yaml
