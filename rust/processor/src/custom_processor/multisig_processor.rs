@@ -204,7 +204,11 @@ async fn update_transaction_status(
             status: new_status,
             executor: new_executor.as_deref(),
             executed_at: new_executed_at,
-            error: Some(payload_value),
+            error: if payload_value.is_null() {
+                None
+            } else {
+                Some(payload_value)
+            },
             payload: None,
         },
         _ => UpdateTransaction {
