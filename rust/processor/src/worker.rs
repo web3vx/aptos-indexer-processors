@@ -258,16 +258,16 @@ impl Worker {
             self.per_table_chunk_sizes.clone(),
             self.db_pool.clone(),
         );
-        tokio::spawn(async move {
-            crate::gap_detector::create_gap_detector_status_tracker_loop(
-                gap_detector_receiver,
-                // processor,
-                custom_processor,
-                starting_version,
-                gap_detection_batch_size,
-            )
-            .await;
-        });
+        // tokio::spawn(async move {
+        //     crate::gap_detector::create_gap_detector_status_tracker_loop(
+        //         gap_detector_receiver,
+        //         // processor,
+        //         custom_processor,
+        //         starting_version,
+        //         gap_detection_batch_size,
+        //     )
+        //     .await;
+        // });
 
 
         // This is the consumer side of the channel. These are the major states:
