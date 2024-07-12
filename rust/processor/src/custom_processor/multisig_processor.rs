@@ -175,6 +175,7 @@ struct UpdateTransaction<'a> {
     executor: Option<&'a str>,
     executed_at: Option<NaiveDateTime>,
     payload: Option<Value>,
+    error: Option<Value>,
 }
 
 async fn update_transaction_status(
@@ -198,14 +199,24 @@ async fn update_transaction_status(
         Value::Null
     };
 
-    let update = UpdateTransaction {
-        status: new_status,
-        executor: new_executor.as_deref(),
-        executed_at: new_executed_at,
-        payload: if payload_value.is_null() {
-            None
-        } else {
-            Some(payload_value)
+    let update = match new_status {
+        4 => UpdateTransaction {
+            status: new_status,
+            executor: new_executor.as_deref(),
+            executed_at: new_executed_at,
+            error: Some(payload_value),
+            payload: None,
+        },
+        _ => UpdateTransaction {
+            status: new_status,
+            executor: new_executor.as_deref(),
+            executed_at: new_executed_at,
+            payload: if payload_value.is_null() {
+                None
+            } else {
+                Some(payload_value)
+            },
+            error: None,
         },
     };
 
@@ -387,9 +398,20 @@ impl CustomProcessorTrait for MultisigProcessor {
                             info!("RemoveOwnersEvent: transactions version {:?}", txn.version);
                             handle_add_owners(self, event, &self.per_table_chunk_sizes).await?;
                         },
+                        "0x1::multisig_account::TransactionExecutionFailedEvent" => {
+                            info!(
+                                "TransactionExecutionFailedEvent: transactions version {:?}",
+                                txn.version
+                            );
+                            handle_transaction_failed_event(
+                                self,
+                                event,
+                                txn.clone().timestamp.unwrap().seconds,
+                            )
+                            .await?;
+                        },
                         "0x1::multisig_account::ExecuteRejectedTransactionEvent"
-                        | "0x1::multisig_account::TransactionExecutionSucceededEvent"
-                        | "0x1::multisig_account::TransactionExecutionFailedEvent" => {
+                        | "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
                             info!(
                                 "Changes status transactions: transactions version {:?}",
                                 txn.version
@@ -495,6 +517,43 @@ async fn handle_vote_event(
         &processor.per_table_chunk_sizes,
     )
     .await?;
+    Ok(())
+}
+
+async fn handle_transaction_failed_event(
+    processor: &MultisigProcessor,
+    event: &Event,
+    timestamp: i64,
+) -> anyhow::Result<()> {
+    info!("Processing Update Transaction Status {:?}", &event.data);
+    let event_data: Value = serde_json::from_str(&event.data)?;
+    let mut new_executor = None;
+    let mut new_executed_at = None;
+    let new_status: i32 = TransactionStatus::Failed as i32;
+    let error_payload = event_data["execution_error"].clone();
+    let filter_wallet_address =
+        standardize_address(event.key.as_ref().unwrap().account_address.as_str());
+    let filter_sequence_number = event_data["sequence_number"]
+        .as_str()
+        .unwrap_or("0")
+        .parse::<i32>()?;
+
+    if let Some(executor_str) = event_data["executor"].as_str() {
+        new_executor = Some(executor_str.to_string());
+    }
+    new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
+
+    update_transaction_status(
+        &processor.get_pool(),
+        filter_wallet_address,
+        filter_sequence_number,
+        new_status,
+        new_executor,
+        new_executed_at,
+        &error_payload.to_string(),
+    )
+    .await?;
+
     Ok(())
 }
 

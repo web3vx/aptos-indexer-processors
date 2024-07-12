@@ -894,11 +894,12 @@ diesel::table! {
         #[max_length = 255]
         executor -> Nullable<Varchar>,
         executed_at -> Nullable<Timestamp>,
+        error -> Nullable<Jsonb>,
     }
 }
 
 diesel::table! {
-    multisig_voting_transactions (transaction_sequence, wallet_address, voter_address, value) {
+    multisig_voting_transactions (transaction_sequence, wallet_address, voter_address) {
         #[max_length = 255]
         voter_address -> Varchar,
         #[max_length = 255]
@@ -1311,11 +1312,6 @@ diesel::table! {
         inserted_at -> Timestamp,
     }
 }
-
-diesel::joinable!(multisig_transactions -> multisig_owners (initiated_by));
-diesel::joinable!(multisig_transactions -> multisig_wallets (wallet_address));
-diesel::joinable!(owners_wallets -> multisig_owners (owner_address));
-diesel::joinable!(owners_wallets -> multisig_wallets (wallet_address));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_transactions,
