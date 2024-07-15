@@ -476,7 +476,7 @@ async fn process_write_resource(
         let owners = owner_addresses
             .iter()
             .map(|entry_owner_address| MultisigOwner {
-                owner_address: entry_owner_address.to_string(),
+                owner_address: entry_owner_address.clone(),
                 created_at: Utc::now().naive_utc(),
             })
             .collect::<Vec<MultisigOwner>>();
@@ -486,7 +486,7 @@ async fn process_write_resource(
         let owner_wallets = owner_addresses
             .iter()
             .map(|entry_owner_address| OwnersWallet {
-                owner_address: entry_owner_address.to_string(),
+                owner_address: entry_owner_address.clone(),
                 wallet_address: write_resource.address.clone(),
                 created_at: Utc::now().naive_utc(),
             })

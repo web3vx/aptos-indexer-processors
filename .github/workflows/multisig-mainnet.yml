@@ -1,0 +1,22 @@
+name: Deploy Multisig Mainnet to Indexer VM
+run-name: ${{ github.actor }} is deploying Multisig Mainnet to Indexer VM
+on:
+  push:
+    branches:
+      - "feature/multisig-indexer-mainnet"
+jobs:
+  deploy:
+    runs-on: multisig-mainnet # 2658037
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - run: |
+          cd rust
+          docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml down || true
+          docker rmi multisig-mainnet || true
+          docker builder prune --all -f
+          echo "${{ secrets.ENV_FILE_MULTISIG_TESTNET }}" >> config.yaml
+          docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml up -d
+          # Remove the last line from the config.yaml file (start_ver)
+          sed -i '$ d' config.yaml
+          docker image prune -f
