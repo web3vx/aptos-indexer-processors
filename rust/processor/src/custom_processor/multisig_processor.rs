@@ -752,7 +752,7 @@ async fn handle_add_owners(
             .unwrap()
             .iter()
             .map(|entry_owner_address| OwnersWallet {
-                owner_address: entry_owner_address.to_string(),
+                owner_address: entry_owner_address.clone(),
                 wallet_address: from_wallet_address.clone(),
                 created_at: Utc::now().naive_utc(),
             })
