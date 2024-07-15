@@ -112,12 +112,7 @@ fn insert_events_query(
     (
         diesel::insert_into(schema::events::table)
             .values(items_to_insert)
-            .on_conflict((transaction_version, event_index))
-            .do_update()
-            .set((
-                inserted_at.eq(excluded(inserted_at)),
-                indexed_type.eq(excluded(indexed_type)),
-            )),
+            .on_conflict_do_nothing(),
         None,
     )
 }
