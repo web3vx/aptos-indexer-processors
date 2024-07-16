@@ -12,8 +12,8 @@ jobs:
         uses: actions/checkout@v3
       - run: |
           cd rust
-          # docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml down || true
-          # docker rmi multisig-mainnet || true
+          docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml down || true
+          docker rmi multisig-mainnet || true
           docker builder prune --all -f
           echo "${{ secrets.ENV_FILE_MULTISIG_MAINNET }}" >> config.yaml
           docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml up -d
