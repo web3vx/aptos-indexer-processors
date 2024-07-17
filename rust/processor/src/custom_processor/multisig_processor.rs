@@ -193,38 +193,54 @@ async fn update_transaction_status(
             .and(sequence_number.eq(filter_sequence_number)),
     );
 
-    let payload_value = if !transaction_payload.is_empty() {
-        serde_json::from_str(transaction_payload).unwrap_or_else(|_| Value::Null)
-    } else {
-        Value::Null
-    };
+    let payload_value = serde_json::from_str(transaction_payload).unwrap_or_else(|_| Value::Null);
 
-    let update = match new_status {
-        4 => UpdateTransaction {
-            status: new_status,
-            executor: new_executor.as_deref(),
-            executed_at: new_executed_at,
-            error: if payload_value.is_null() {
-                None
-            } else {
-                Some(payload_value)
-            },
-            payload: None,
+    let update = UpdateTransaction {
+        status: new_status,
+        executor: new_executor.as_deref(),
+        executed_at: new_executed_at,
+        payload: if payload_value.is_null() {
+            None
+        } else {
+            Some(payload_value)
         },
-        _ => UpdateTransaction {
-            status: new_status,
-            executor: new_executor.as_deref(),
-            executed_at: new_executed_at,
-            payload: if payload_value.is_null() {
-                None
-            } else {
-                Some(payload_value)
-            },
-            error: None,
-        },
+        error: None,
     };
 
     execute_with_better_error(pool.clone(), diesel::update(target).set(update), None).await?;
+
+    Ok(())
+}
+
+async fn update_failed_transaction_status(
+    pool: &PgDbPool,
+    filter_wallet_address: String,
+    filter_sequence_number: i32,
+    new_executor: Option<String>,
+    new_executed_at: Option<NaiveDateTime>,
+    error_payload: &str,
+) -> anyhow::Result<()> {
+    let target = schema::multisig_transactions::table.filter(
+        wallet_address
+            .eq(filter_wallet_address)
+            .and(sequence_number.eq(filter_sequence_number)),
+    );
+
+    let error_value = serde_json::from_str(error_payload).unwrap_or_else(|_| Value::Null);
+
+    let update = UpdateTransaction {
+        status: TransactionStatus::Failed as i32,
+        executor: new_executor.as_deref(),
+        executed_at: new_executed_at,
+        error: Some(error_value),
+        payload: None,
+    };
+
+    let response =
+        execute_with_better_error(pool.clone(), diesel::update(target).set(update), None).await;
+    if response.is_err() {
+        error!("Error updating transaction status: {:?}", response);
+    }
 
     Ok(())
 }
@@ -533,7 +549,6 @@ async fn handle_transaction_failed_event(
     let event_data: Value = serde_json::from_str(&event.data)?;
     let mut new_executor = None;
     let mut new_executed_at = None;
-    let new_status: i32 = TransactionStatus::Failed as i32;
     let error_payload = event_data["execution_error"].clone();
     let filter_wallet_address =
         standardize_address(event.key.as_ref().unwrap().account_address.as_str());
@@ -547,11 +562,10 @@ async fn handle_transaction_failed_event(
     }
     new_executed_at = Some(DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc());
 
-    update_transaction_status(
+    update_failed_transaction_status(
         &processor.get_pool(),
         filter_wallet_address,
         filter_sequence_number,
-        new_status,
         new_executor,
         new_executed_at,
         &error_payload.to_string(),
@@ -582,9 +596,6 @@ async fn handle_transaction_status_event(
     match event.type_str.as_str() {
         "0x1::multisig_account::ExecuteRejectedTransactionEvent" => {
             new_status = TransactionStatus::Rejected as i32;
-        },
-        "0x1::multisig_account::TransactionExecutionFailedEvent" => {
-            new_status = TransactionStatus::Failed as i32
         },
         "0x1::multisig_account::TransactionExecutionSucceededEvent" => {
             transaction_payload = event_data["transaction_payload"]
