@@ -20,10 +20,10 @@ pub fn decode_event_payload(event_data: &Value) -> anyhow::Result<Vec<u8>> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Payload string missing"));
     match payload_str {
-        Ok(payload_str) => hex::decode(payload_str.strip_prefix("0x").unwrap_or(payload_str)).map_err(anyhow::Error::new),
+        Ok(payload_str) => hex::decode(payload_str.strip_prefix("0x").unwrap_or(payload_str))
+            .map_err(anyhow::Error::new),
         Err(e) => Err(e),
     }
-
 }
 
 pub fn parse_payload(payload: &[u8]) -> anyhow::Result<MultisigTransactionPayload> {
@@ -36,6 +36,7 @@ pub async fn process_entry_function(
     let MultisigTransactionPayload::EntryFunction(ref entry) = *payload_parsed else {
         return Err(anyhow::anyhow!("Payload is not EntryFunction"));
     };
+
     let function_details = fetch_function_details(&entry.module).await?;
     let parsed_args = parse_function_args(&function_details, &entry.args, &entry.function)?;
     let mut json_payload = serde_json::to_value(&payload_parsed)?;
@@ -45,7 +46,7 @@ pub async fn process_entry_function(
 
 async fn fetch_function_details(module: &ModuleId) -> anyhow::Result<Value> {
     let request_url = format!(
-        "https://fullnode.testnet.aptoslabs.com/v1/accounts/{}/module/{}",
+        "https://fullnode.mainnet.aptoslabs.com/v1/accounts/{}/module/{}",
         module.address, module.name
     );
     let response = reqwest::get(&request_url).await?;
@@ -71,6 +72,9 @@ pub fn parse_function_args(
         .iter()
         .filter(|&x| x.as_str() != Some("&signer"))
         .collect::<Vec<_>>();
+    if args.len() != function_params.len() {
+        return Ok(Vec::new());
+    };
     args.iter()
         .enumerate()
         .map(|(index, arg)| {
