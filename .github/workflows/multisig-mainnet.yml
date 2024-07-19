@@ -18,5 +18,4 @@ jobs:
           echo "${{ secrets.ENV_FILE_MULTISIG_MAINNET }}" >> config.yaml
           docker compose --project-name multisig-mainnet -f docker-compose-multisig-mainnet.yaml up -d
           # Remove the last line from the config.yaml file (start_ver)
-          sed -i '$ d' config.yaml
           docker image prune -f
