@@ -1,4 +1,4 @@
-use move_core_types::value::{MoveTypeLayout, MoveValue};
+use move_core_types::value::{MoveStructLayout, MoveTypeLayout, MoveValue};
 use std::str::from_utf8;
 
 pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
@@ -13,7 +13,9 @@ pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
         "u256" => Some(MoveTypeLayout::U256),
         "&signer" => Some(MoveTypeLayout::Signer),
         "0x1::object::Object" => Some(MoveTypeLayout::Address),
-        "0x1::string::String" => Some(MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8))),
+        "0x1::string::String" => Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        ]))),
         _ => parse_vector(type_string),
     }
 }
@@ -40,7 +42,7 @@ pub fn parse_nested_move_values(input: &MoveValue) -> String {
                 return String::from("[]");
             }
             if let MoveValue::U8(_) = vec[0] {
-                return format!("\"{}\"",parse_string_vectors(&input.to_string()))
+                return format!("\"{}\"", parse_string_vectors(&input.to_string()));
             }
             let mut result = String::from("[");
             for value in vec {
