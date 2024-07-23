@@ -19,7 +19,11 @@ pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
 }
 
 fn parse_vector(type_string: &str) -> Option<MoveTypeLayout> {
-    if let Some(stripped) = type_string
+    let mut replaced = type_string.to_string();
+    if type_string.starts_with("0x1::option::Option") {
+        replaced = type_string.replace("0x1::option::Option", "vector");
+    }
+    if let Some(stripped) = replaced
         .strip_prefix("vector<")
         .and_then(|s| s.strip_suffix(">"))
     {
