@@ -1,17 +1,19 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ProcessingResult, ProcessorName, ProcessorTrait};
+use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
 use crate::{
-    models::object_models::{
+    db::common::models::object_models::{
         v2_object_utils::{ObjectAggregatedData, ObjectAggregatedDataMapping, ObjectWithMetadata},
         v2_objects::{CurrentObject, Object},
     },
+    gap_detectors::ProcessingResult,
     schema,
     utils::{
-        database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
+        database::{execute_in_chunks, get_config_table_chunk_size, ArcDbPool},
         util::standardize_address,
     },
+    worker::TableFlags,
     IndexerGrpcProcessorConfig,
 };
 use ahash::AHashMap;
@@ -36,21 +38,24 @@ pub struct ObjectsProcessorConfig {
     pub query_retry_delay_ms: u64,
 }
 pub struct ObjectsProcessor {
-    connection_pool: PgDbPool,
+    connection_pool: ArcDbPool,
     config: ObjectsProcessorConfig,
     per_table_chunk_sizes: AHashMap<String, usize>,
+    deprecated_tables: TableFlags,
 }
 
 impl ObjectsProcessor {
     pub fn new(
-        connection_pool: PgDbPool,
+        connection_pool: ArcDbPool,
         config: ObjectsProcessorConfig,
         per_table_chunk_sizes: AHashMap<String, usize>,
+        deprecated_tables: TableFlags,
     ) -> Self {
         Self {
             connection_pool,
             config,
             per_table_chunk_sizes,
+            deprecated_tables,
         }
     }
 }
@@ -67,7 +72,7 @@ impl Debug for ObjectsProcessor {
 }
 
 async fn insert_to_db(
-    conn: PgDbPool,
+    conn: ArcDbPool,
     name: &'static str,
     start_version: u64,
     end_version: u64,
@@ -138,6 +143,7 @@ fn insert_current_objects_query(
                 last_transaction_version.eq(excluded(last_transaction_version)),
                 is_deleted.eq(excluded(is_deleted)),
                 inserted_at.eq(excluded(inserted_at)),
+                untransferrable.eq(excluded(untransferrable)),
             )),
         Some(
             " WHERE current_objects.last_transaction_version <= excluded.last_transaction_version ",
@@ -204,7 +210,10 @@ impl ProcessorTrait for ObjectsProcessor {
                             concurrent_supply: None,
                             property_map: None,
                             transfer_events: vec![],
+                            untransferable: None,
                             fungible_asset_supply: None,
+                            concurrent_fungible_asset_supply: None,
+                            concurrent_fungible_asset_balance: None,
                             token_identifier: None,
                         });
                     }
@@ -260,6 +269,10 @@ impl ProcessorTrait for ObjectsProcessor {
             .collect::<Vec<CurrentObject>>();
         all_current_objects.sort_by(|a, b| a.object_address.cmp(&b.object_address));
 
+        if self.deprecated_tables.contains(TableFlags::OBJECTS) {
+            all_objects.clear();
+        }
+
         let processing_duration_in_secs = processing_start.elapsed().as_secs_f64();
         let db_insertion_start = std::time::Instant::now();
 
@@ -275,13 +288,15 @@ impl ProcessorTrait for ObjectsProcessor {
         let db_insertion_duration_in_secs = db_insertion_start.elapsed().as_secs_f64();
 
         match tx_result {
-            Ok(_) => Ok(ProcessingResult {
-                start_version,
-                end_version,
-                processing_duration_in_secs,
-                db_insertion_duration_in_secs,
-                last_transaction_timestamp,
-            }),
+            Ok(_) => Ok(ProcessingResult::DefaultProcessingResult(
+                DefaultProcessingResult {
+                    start_version,
+                    end_version,
+                    processing_duration_in_secs,
+                    db_insertion_duration_in_secs,
+                    last_transaction_timestamp,
+                },
+            )),
             Err(e) => {
                 error!(
                     start_version = start_version,
@@ -295,7 +310,7 @@ impl ProcessorTrait for ObjectsProcessor {
         }
     }
 
-    fn connection_pool(&self) -> &PgDbPool {
+    fn connection_pool(&self) -> &ArcDbPool {
         &self.connection_pool
     }
 }

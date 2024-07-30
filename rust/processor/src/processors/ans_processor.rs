@@ -1,21 +1,23 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ProcessingResult, ProcessorName, ProcessorTrait};
+use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
 use crate::{
-    models::ans_models::{
+    db::common::models::ans_models::{
         ans_lookup::{AnsLookup, AnsPrimaryName, CurrentAnsLookup, CurrentAnsPrimaryName},
         ans_lookup_v2::{
             AnsLookupV2, AnsPrimaryNameV2, CurrentAnsLookupV2, CurrentAnsPrimaryNameV2,
         },
         ans_utils::{RenewNameEvent, SubdomainExtV2},
     },
+    gap_detectors::ProcessingResult,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
-        database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
+        database::{execute_in_chunks, get_config_table_chunk_size, ArcDbPool},
         util::standardize_address,
     },
+    worker::TableFlags,
 };
 use ahash::AHashMap;
 use anyhow::bail;
@@ -41,16 +43,18 @@ pub struct AnsProcessorConfig {
 }
 
 pub struct AnsProcessor {
-    connection_pool: PgDbPool,
+    connection_pool: ArcDbPool,
     config: AnsProcessorConfig,
     per_table_chunk_sizes: AHashMap<String, usize>,
+    deprecated_tables: TableFlags,
 }
 
 impl AnsProcessor {
     pub fn new(
-        connection_pool: PgDbPool,
+        connection_pool: ArcDbPool,
         config: AnsProcessorConfig,
         per_table_chunk_sizes: AHashMap<String, usize>,
+        deprecated_tables: TableFlags,
     ) -> Self {
         tracing::info!(
             ans_v1_primary_names_table_handle = config.ans_v1_primary_names_table_handle,
@@ -62,6 +66,7 @@ impl AnsProcessor {
             connection_pool,
             config,
             per_table_chunk_sizes,
+            deprecated_tables,
         }
     }
 }
@@ -78,7 +83,7 @@ impl Debug for AnsProcessor {
 }
 
 async fn insert_to_db(
-    conn: PgDbPool,
+    conn: ArcDbPool,
     name: &'static str,
     start_version: u64,
     end_version: u64,
@@ -371,14 +376,14 @@ impl ProcessorTrait for AnsProcessor {
         let last_transaction_timestamp = transactions.last().unwrap().timestamp.clone();
 
         let (
-            all_current_ans_lookups,
-            all_ans_lookups,
-            all_current_ans_primary_names,
-            all_ans_primary_names,
+            mut all_current_ans_lookups,
+            mut all_ans_lookups,
+            mut all_current_ans_primary_names,
+            mut all_ans_primary_names,
             all_current_ans_lookups_v2,
             all_ans_lookups_v2,
             all_current_ans_primary_names_v2,
-            all_ans_primary_names_v2,
+            mut all_ans_primary_names_v2,
         ) = parse_ans(
             &transactions,
             self.config.ans_v1_primary_names_table_handle.clone(),
@@ -388,6 +393,34 @@ impl ProcessorTrait for AnsProcessor {
 
         let processing_duration_in_secs = processing_start.elapsed().as_secs_f64();
         let db_insertion_start = std::time::Instant::now();
+
+        if self
+            .deprecated_tables
+            .contains(TableFlags::ANS_PRIMARY_NAME)
+        {
+            all_ans_primary_names.clear();
+        }
+        if self
+            .deprecated_tables
+            .contains(TableFlags::ANS_PRIMARY_NAME_V2)
+        {
+            all_ans_primary_names_v2.clear();
+        }
+        if self.deprecated_tables.contains(TableFlags::ANS_LOOKUP) {
+            all_ans_lookups.clear();
+        }
+        if self
+            .deprecated_tables
+            .contains(TableFlags::CURRENT_ANS_LOOKUP)
+        {
+            all_current_ans_lookups.clear();
+        }
+        if self
+            .deprecated_tables
+            .contains(TableFlags::CURRENT_ANS_PRIMARY_NAME)
+        {
+            all_current_ans_primary_names.clear();
+        }
 
         // Insert values to db
         let tx_result = insert_to_db(
@@ -410,13 +443,15 @@ impl ProcessorTrait for AnsProcessor {
         let db_insertion_duration_in_secs = db_insertion_start.elapsed().as_secs_f64();
 
         match tx_result {
-            Ok(_) => Ok(ProcessingResult {
-                start_version,
-                end_version,
-                processing_duration_in_secs,
-                db_insertion_duration_in_secs,
-                last_transaction_timestamp,
-            }),
+            Ok(_) => Ok(ProcessingResult::DefaultProcessingResult(
+                DefaultProcessingResult {
+                    start_version,
+                    end_version,
+                    processing_duration_in_secs,
+                    db_insertion_duration_in_secs,
+                    last_transaction_timestamp,
+                },
+            )),
             Err(e) => {
                 error!(
                     start_version = start_version,
@@ -430,7 +465,7 @@ impl ProcessorTrait for AnsProcessor {
         }
     }
 
-    fn connection_pool(&self) -> &PgDbPool {
+    fn connection_pool(&self) -> &ArcDbPool {
         &self.connection_pool
     }
 }

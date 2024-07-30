@@ -1,16 +1,18 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ProcessingResult, ProcessorName, ProcessorTrait};
+use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
 use crate::{
-    models::user_transactions_models::{
+    db::common::models::user_transactions_models::{
         signatures::Signature, user_transactions::UserTransactionModel,
     },
+    gap_detectors::ProcessingResult,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
-        database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
+        database::{execute_in_chunks, get_config_table_chunk_size, ArcDbPool},
     },
+    worker::TableFlags,
 };
 use ahash::AHashMap;
 use anyhow::bail;
@@ -25,15 +27,21 @@ use std::fmt::Debug;
 use tracing::error;
 
 pub struct UserTransactionProcessor {
-    connection_pool: PgDbPool,
+    connection_pool: ArcDbPool,
     per_table_chunk_sizes: AHashMap<String, usize>,
+    deprecated_tables: TableFlags,
 }
 
 impl UserTransactionProcessor {
-    pub fn new(connection_pool: PgDbPool, per_table_chunk_sizes: AHashMap<String, usize>) -> Self {
+    pub fn new(
+        connection_pool: ArcDbPool,
+        per_table_chunk_sizes: AHashMap<String, usize>,
+        deprecated_tables: TableFlags,
+    ) -> Self {
         Self {
             connection_pool,
             per_table_chunk_sizes,
+            deprecated_tables,
         }
     }
 }
@@ -50,7 +58,7 @@ impl Debug for UserTransactionProcessor {
 }
 
 async fn insert_to_db(
-    conn: PgDbPool,
+    conn: ArcDbPool,
     name: &'static str,
     start_version: u64,
     end_version: u64,
@@ -176,6 +184,10 @@ impl ProcessorTrait for UserTransactionProcessor {
             }
         }
 
+        if self.deprecated_tables.contains(TableFlags::SIGNATURES) {
+            signatures.clear();
+        }
+
         let processing_duration_in_secs = processing_start.elapsed().as_secs_f64();
         let db_insertion_start = std::time::Instant::now();
 
@@ -191,13 +203,15 @@ impl ProcessorTrait for UserTransactionProcessor {
         .await;
         let db_insertion_duration_in_secs = db_insertion_start.elapsed().as_secs_f64();
         match tx_result {
-            Ok(_) => Ok(ProcessingResult {
-                start_version,
-                end_version,
-                processing_duration_in_secs,
-                db_insertion_duration_in_secs,
-                last_transaction_timestamp,
-            }),
+            Ok(_) => Ok(ProcessingResult::DefaultProcessingResult(
+                DefaultProcessingResult {
+                    start_version,
+                    end_version,
+                    processing_duration_in_secs,
+                    db_insertion_duration_in_secs,
+                    last_transaction_timestamp,
+                },
+            )),
             Err(e) => {
                 error!(
                     start_version = start_version,
@@ -211,7 +225,7 @@ impl ProcessorTrait for UserTransactionProcessor {
         }
     }
 
-    fn connection_pool(&self) -> &PgDbPool {
+    fn connection_pool(&self) -> &ArcDbPool {
         &self.connection_pool
     }
 }
