@@ -4,20 +4,16 @@
 // Note: For enum_dispatch to work nicely, it is easiest to have the trait and the enum
 // in the same file (ProcessorTrait and Processor).
 
-// Note: For enum_dispatch to work nicely, it is easiest to have the trait and the enum
-// in the same file (ProcessorTrait and Processor).
-
 pub mod account_transactions_processor;
 pub mod ans_processor;
-pub mod coin_processor;
 pub mod default_processor;
 pub mod events_processor;
 pub mod fungible_asset_processor;
 pub mod monitoring_processor;
 pub mod nft_metadata_processor;
 pub mod objects_processor;
+pub mod parquet_processors;
 pub mod stake_processor;
-pub mod token_processor;
 pub mod token_v2_processor;
 pub mod transaction_metadata_processor;
 pub mod user_transaction_processor;
@@ -25,7 +21,6 @@ pub mod user_transaction_processor;
 use self::{
     account_transactions_processor::AccountTransactionsProcessor,
     ans_processor::{AnsProcessor, AnsProcessorConfig},
-    coin_processor::CoinProcessor,
     default_processor::DefaultProcessor,
     events_processor::EventsProcessor,
     fungible_asset_processor::FungibleAssetProcessor,
@@ -33,17 +28,29 @@ use self::{
     nft_metadata_processor::{NftMetadataProcessor, NftMetadataProcessorConfig},
     objects_processor::{ObjectsProcessor, ObjectsProcessorConfig},
     stake_processor::{StakeProcessor, StakeProcessorConfig},
-    token_processor::{TokenProcessor, TokenProcessorConfig},
     token_v2_processor::{TokenV2Processor, TokenV2ProcessorConfig},
     transaction_metadata_processor::TransactionMetadataProcessor,
     user_transaction_processor::UserTransactionProcessor,
 };
 use crate::{
-    models::processor_status::ProcessorStatus,
+    db::common::models::processor_status::ProcessorStatus,
+    gap_detectors::ProcessingResult,
+    processors::parquet_processors::{
+        parquet_ans_processor::{ParquetAnsProcessor, ParquetAnsProcessorConfig},
+        parquet_default_processor::{ParquetDefaultProcessor, ParquetDefaultProcessorConfig},
+        parquet_events_processor::{ParquetEventsProcessor, ParquetEventsProcessorConfig},
+        parquet_fungible_asset_processor::{
+            ParquetFungibleAssetProcessor, ParquetFungibleAssetProcessorConfig,
+        },
+        parquet_token_v2_processor::{ParquetTokenV2Processor, ParquetTokenV2ProcessorConfig},
+        parquet_transaction_metadata_processor::{
+            ParquetTransactionMetadataProcessor, ParquetTransactionMetadataProcessorConfig,
+        },
+    },
     schema::processor_status,
     utils::{
         counters::{GOT_CONNECTION_COUNT, UNABLE_TO_GET_CONNECTION_COUNT},
-        database::{execute_with_better_error, PgDbPool, PgPoolConnection},
+        database::{execute_with_better_error, ArcDbPool, DbPoolConnection},
         util::parse_timestamp,
     },
 };
@@ -55,7 +62,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ProcessingResult {
+pub struct DefaultProcessingResult {
     pub start_version: u64,
     pub end_version: u64,
     pub last_transaction_timestamp: Option<aptos_protos::util::timestamp::Timestamp>,
@@ -80,19 +87,19 @@ pub trait ProcessorTrait: Send + Sync + Debug {
 
     /// Gets a reference to the connection pool
     /// This is used by the `get_conn()` helper below
-    fn connection_pool(&self) -> &PgDbPool;
+    fn connection_pool(&self) -> &ArcDbPool;
 
     //* Below are helper methods that don't need to be implemented *//
 
     /// Gets an instance of the connection pool
-    fn get_pool(&self) -> PgDbPool {
+    fn get_pool(&self) -> ArcDbPool {
         let pool = self.connection_pool();
         pool.clone()
     }
 
     /// Gets the connection.
     /// If it was unable to do so (default timeout: 30s), it will keep retrying until it can.
-    async fn get_conn(&self) -> PgPoolConnection {
+    async fn get_conn(&self) -> DbPoolConnection {
         let pool = self.connection_pool();
         loop {
             match pool.get().await {
@@ -181,7 +188,6 @@ pub trait ProcessorTrait: Send + Sync + Debug {
 pub enum ProcessorConfig {
     AccountTransactionsProcessor,
     AnsProcessor(AnsProcessorConfig),
-    CoinProcessor,
     DefaultProcessor,
     EventsProcessor,
     FungibleAssetProcessor,
@@ -189,10 +195,15 @@ pub enum ProcessorConfig {
     NftMetadataProcessor(NftMetadataProcessorConfig),
     ObjectsProcessor(ObjectsProcessorConfig),
     StakeProcessor(StakeProcessorConfig),
-    TokenProcessor(TokenProcessorConfig),
     TokenV2Processor(TokenV2ProcessorConfig),
     TransactionMetadataProcessor,
     UserTransactionProcessor,
+    ParquetDefaultProcessor(ParquetDefaultProcessorConfig),
+    ParquetFungibleAssetProcessor(ParquetFungibleAssetProcessorConfig),
+    ParquetTransactionMetadataProcessor(ParquetTransactionMetadataProcessorConfig),
+    ParquetAnsProcessor(ParquetAnsProcessorConfig),
+    ParquetEventsProcessor(ParquetEventsProcessorConfig),
+    ParquetTokenV2Processor(ParquetTokenV2ProcessorConfig),
 }
 
 impl ProcessorConfig {
@@ -200,6 +211,18 @@ impl ProcessorConfig {
     /// method to access the derived functionality implemented by strum::IntoStaticStr.
     pub fn name(&self) -> &'static str {
         self.into()
+    }
+
+    pub fn is_parquet_processor(&self) -> bool {
+        matches!(
+            self,
+            ProcessorConfig::ParquetDefaultProcessor(_)
+                | ProcessorConfig::ParquetFungibleAssetProcessor(_)
+                | ProcessorConfig::ParquetTransactionMetadataProcessor(_)
+                | ProcessorConfig::ParquetAnsProcessor(_)
+                | ProcessorConfig::ParquetEventsProcessor(_)
+                | ProcessorConfig::ParquetTokenV2Processor(_)
+        )
     }
 }
 
@@ -223,7 +246,6 @@ impl ProcessorConfig {
 pub enum Processor {
     AccountTransactionsProcessor,
     AnsProcessor,
-    CoinProcessor,
     DefaultProcessor,
     EventsProcessor,
     FungibleAssetProcessor,
@@ -231,10 +253,16 @@ pub enum Processor {
     NftMetadataProcessor,
     ObjectsProcessor,
     StakeProcessor,
-    TokenProcessor,
     TokenV2Processor,
     TransactionMetadataProcessor,
     UserTransactionProcessor,
+    // Parquet processors
+    ParquetDefaultProcessor,
+    ParquetFungibleAssetProcessor,
+    ParquetTransactionMetadataProcessor,
+    ParquetAnsProcessor,
+    ParquetEventsProcessor,
+    ParquetTokenV2Processor,
 }
 
 #[cfg(test)]
