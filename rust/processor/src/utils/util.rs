@@ -1,7 +1,6 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::events_models::events::Event;
 use crate::{
     db::common::models::property_map::{PropertyMap, TokenObjectPropertyMap},
     utils::counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
@@ -23,6 +22,7 @@ use serde_json::Value;
 use sha2::Digest;
 use std::str::FromStr;
 use tiny_keccak::{Hasher, Sha3};
+use crate::db::common::models::events_models::events::Event;
 
 // 9999-12-31 23:59:59, this is the max supported by Google BigQuery
 pub const MAX_TIMESTAMP_SECS: i64 = 253_402_300_799;
