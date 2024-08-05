@@ -132,8 +132,8 @@ impl ProcessorTrait for EventsProcessor {
             let txn_events = EventModel::from_events(raw_events, txn_version, block_height, tnx_user_request, &inserted_at);
             let mut filtered_events = vec![];
             let filter_addresses = vec![
-                "0xf9254492a5bb97685bb1789834668f3f8f391336b11c063b74ac6f83c37f6ecf::tapos_game_2::SetTaskPoints",
-                "0xf9254492a5bb97685bb1789834668f3f8f391336b11c063b74ac6f83c37f6ecf::tapos_game_2::AddEquipment",
+                "0x3d2712f18f32fc30cf5c30777d4a82fd88127f9e8a34f752a44f0a6b7abbfe07::tapos_game_2::SetTaskPoints",
+                "0x3d2712f18f32fc30cf5c30777d4a82fd88127f9e8a34f752a44f0a6b7abbfe07::tapos_game_2::AddEquipment",
             ];
             for txn_event in txn_events {
                 if filter_addresses.iter().any(|address| txn_event.type_.contains(address)) {
