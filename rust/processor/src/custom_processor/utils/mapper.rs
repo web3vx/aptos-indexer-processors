@@ -13,6 +13,7 @@ pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
         "u256" => Some(MoveTypeLayout::U256),
         "&signer" => Some(MoveTypeLayout::Signer),
         "0x1::object::Object" => Some(MoveTypeLayout::Address),
+        s if s.starts_with("0x1::object::Object<") => Some(MoveTypeLayout::Address),
         "0x1::string::String" => Some(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
             MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
         ]))),

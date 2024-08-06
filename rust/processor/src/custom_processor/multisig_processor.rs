@@ -403,9 +403,12 @@ impl CustomProcessorTrait for MultisigProcessor {
                                 "CreateTransactionEvent: transactions version {:?}",
                                 txn.version
                             );
+                            let info = txn.clone().info.unwrap();
+                            let hash = standardize_address(hex::encode(info.hash.as_slice()).as_str());
                             handle_create_transaction_event(
                                 self,
                                 event,
+                                &hash,
                                 txn.clone().timestamp.unwrap().seconds,
                             )
                             .await?;
@@ -649,6 +652,7 @@ async fn handle_transaction_status_event(
 async fn handle_create_transaction_event(
     processor: &MultisigProcessor,
     event: &Event,
+    hash: &str,
     timestamp: i64,
 ) -> anyhow::Result<()> {
     info!("Processing CreateTransactionEvent {:?}", &event.data);
@@ -683,6 +687,7 @@ async fn handle_create_transaction_event(
         payload_hash: Some(event_data["transaction"]["payload_hash"].clone()),
         created_at: DateTime::from_timestamp(timestamp, 0).unwrap().naive_utc(),
         status: TransactionStatus::Pending as i32,
+        transaction_hash: Some(hash.to_string()),
         executor: None,
         executed_at: None,
     };
