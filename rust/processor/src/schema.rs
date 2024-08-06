@@ -861,9 +861,10 @@ diesel::table! {
 }
 
 diesel::table! {
-    multisig_contacts (owner_address, contact_address) {
+    multisig_contacts (id) {
+        id -> Int4,
         #[max_length = 255]
-        owner_address -> Varchar,
+        wallet_address -> Varchar,
         #[max_length = 255]
         contact_address -> Varchar,
         #[max_length = 255]
@@ -895,6 +896,8 @@ diesel::table! {
         executor -> Nullable<Varchar>,
         executed_at -> Nullable<Timestamp>,
         error -> Nullable<Jsonb>,
+        #[max_length = 255]
+        transaction_hash -> Nullable<Varchar>,
     }
 }
 
@@ -1312,6 +1315,8 @@ diesel::table! {
         inserted_at -> Timestamp,
     }
 }
+
+diesel::joinable!(multisig_contacts -> multisig_wallets (wallet_address));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account_transactions,

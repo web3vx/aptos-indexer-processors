@@ -33,6 +33,7 @@ pub struct MultisigTransaction {
     pub payload_hash: Option<Value>,
     pub status: i32,
     pub created_at: NaiveDateTime,
+    pub transaction_hash: Option<String>,
     pub executed_at: Option<NaiveDateTime>,
     pub executor: Option<String>,
 }
