@@ -1,0 +1,11 @@
+health_check_port: 8084
+server_config:
+  processor_config:
+    type: default_processor
+  custom_processor_config:
+    type: multisig_processor
+  postgres_connection_string: postgres://dev:zCBB5DZAYUb51462@localhost:5438/indexer-mainnet
+  indexer_grpc_data_service_address: https://grpc.mainnet.aptoslabs.com:443
+  auth_token: aptoslabs_hnLAVa4du21_LJwJTZMsZ24PUBggUxXAX9A224DVPtFVd
+  starting_version: 1080199734
+  ending_version: 1080199734
