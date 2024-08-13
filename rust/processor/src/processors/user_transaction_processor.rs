@@ -174,7 +174,7 @@ impl ProcessorTrait for UserTransactionProcessor {
                     txn_version,
                 );
                 // TODO: Check Taptos  transactions, change in mainnet
-                if user_transaction.entry_function_id_str != "0x3d2712f18f32fc30cf5c30777d4a82fd88127f9e8a34f752a44f0a6b7abbfe07::tapos_game_2::play" {
+                if user_transaction.entry_function_id_str != "0x7de3fea83cd5ca0e1def27c3f3803af619882db51f34abf30dd04ad12ee6af31::tapos_game_2::play" {
                     continue;
                 }
                 signatures.extend(sigs);
