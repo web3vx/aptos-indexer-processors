@@ -1,39 +1,36 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Debug;
-use std::future::Future;
-use std::pin::Pin;
-
-use ahash::AHashMap;
-use anyhow::bail;
-use aptos_protos::transaction::v1::{
-    Event, EventKey, Transaction, transaction::TxnData, WriteSetChange,
-};
-use aptos_protos::transaction::v1::write_set_change::Change;
-use aptos_protos::util::timestamp::Timestamp;
-use async_trait::async_trait;
-use diesel::{
-    ExpressionMethods,
-    pg::{Pg, upsert::excluded},
-    query_builder::QueryFragment,
-};
-use once_cell::sync::Lazy;
-use tracing::error;
-use tracing::log::info;
-
+use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
+use crate::utils::util::standardize_address;
 use crate::{
     db::common::models::events_models::events::EventModel,
     gap_detectors::ProcessingResult,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
-        database::{ArcDbPool, execute_in_chunks, get_config_table_chunk_size},
+        database::{execute_in_chunks, get_config_table_chunk_size, ArcDbPool},
     },
 };
-use crate::utils::util::standardize_address;
-
-use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
+use ahash::AHashMap;
+use anyhow::bail;
+use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::{
+    transaction::TxnData, Event, EventKey, Transaction, WriteSetChange,
+};
+use aptos_protos::util::timestamp::Timestamp;
+use async_trait::async_trait;
+use diesel::{
+    pg::{upsert::excluded, Pg},
+    query_builder::QueryFragment,
+    ExpressionMethods,
+};
+use once_cell::sync::Lazy;
+use std::fmt::Debug;
+use std::future::Future;
+use std::pin::Pin;
+use tracing::error;
+use tracing::log::info;
 
 static FILTERED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
@@ -109,6 +106,7 @@ fn insert_events_query(
     impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send,
     Option<&'static str>,
 ) {
+    use schema::events::dsl::*;
     (
         diesel::insert_into(schema::events::table)
             .values(items_to_insert)
@@ -170,6 +168,39 @@ impl ProcessorTrait for EventsProcessor {
             }
             let inserted_at = txn.timestamp.clone();
 
+            if let TxnData::User(txn_inner) = txn_data {
+                let changes = &txn.clone().info.unwrap().changes;
+                let filtered = changes.iter().filter(|c| {
+                    let Change::WriteResource(write_resource) = &c.change.as_ref().unwrap() else {
+                        return false;
+                    };
+                    write_resource.type_str.as_str() == "0x1::multisig_account::MultisigAccount"
+                });
+                filtered.for_each(|c| {
+                    if let Change::WriteResource(write_resource) = &c.change.as_ref().unwrap() {
+                        let from = tnx_user_request.as_ref().unwrap().sender.as_str();
+                        let event = Event {
+                            key: Some(EventKey {
+                                account_address: standardize_address(from),
+                                creation_number: txn_inner.clone().request.unwrap().sequence_number,
+                            }),
+                            sequence_number: txn_inner.clone().request.unwrap().sequence_number,
+                            r#type: None,
+                            type_str: write_resource.type_str.to_string(),
+                            data: write_resource.data.to_string(),
+                        };
+                        let txn_create_multisig_event = EventModel::from_event(
+                            &event,
+                            txn_version,
+                            block_height,
+                            events.len() as i64,
+                            tnx_user_request,
+                            &inserted_at,
+                        );
+                        events.push(txn_create_multisig_event);
+                    }
+                });
+            }
             let txn_events = EventModel::from_events(
                 raw_events,
                 txn_version,
@@ -179,7 +210,8 @@ impl ProcessorTrait for EventsProcessor {
             );
             for txn_event in txn_events {
                 // if REQUIRED_EVENTS.contains(&txn_event.type_.as_str())
-                if !FILTERED_EVENTS.contains(&txn_event.type_.as_str()) {
+                if !FILTERED_EVENTS.contains(&txn_event.type_.as_str())
+                {
                     events.push(txn_event);
                 }
             }
