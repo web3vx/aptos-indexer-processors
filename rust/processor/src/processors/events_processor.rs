@@ -7,31 +7,31 @@ use std::pin::Pin;
 
 use ahash::AHashMap;
 use anyhow::bail;
-use aptos_protos::transaction::v1::{
-    Event, EventKey, Transaction, transaction::TxnData, WriteSetChange,
-};
 use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::{
+    transaction::TxnData, Event, EventKey, Transaction, WriteSetChange,
+};
 use aptos_protos::util::timestamp::Timestamp;
 use async_trait::async_trait;
 use diesel::{
-    ExpressionMethods,
-    pg::{Pg, upsert::excluded},
+    pg::{upsert::excluded, Pg},
     query_builder::QueryFragment,
+    ExpressionMethods,
 };
 use once_cell::sync::Lazy;
 use tracing::error;
 use tracing::log::info;
 
+use crate::utils::util::standardize_address;
 use crate::{
     db::common::models::events_models::events::EventModel,
     gap_detectors::ProcessingResult,
     schema,
     utils::{
         counters::PROCESSOR_UNKNOWN_TYPE_COUNT,
-        database::{ArcDbPool, execute_in_chunks, get_config_table_chunk_size},
+        database::{execute_in_chunks, get_config_table_chunk_size, ArcDbPool},
     },
 };
-use crate::utils::util::standardize_address;
 
 use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
 
@@ -200,8 +200,10 @@ impl ProcessorTrait for EventsProcessor {
                 &inserted_at,
             );
             for txn_event in txn_events {
-                if REQUIRED_EVENTS.contains(&txn_event.type_.as_str()) {
-                // if !FILTERED_EVENTS.contains(&txn_event.type_.as_str()) {
+                if REQUIRED_EVENTS
+                    .iter()
+                    .any(|address| txn_event.type_.contains(address))
+                {
                     events.push(txn_event);
                 }
             }
