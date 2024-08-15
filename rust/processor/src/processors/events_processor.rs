@@ -49,7 +49,7 @@ static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
         "0x1::voting",
         "0x1::aptos_governance",
-        "0x1::delegation_pool",
+        // "0x1::delegation_pool",
         "0x1::staking_contract::CreateStakingContractEvent",
         "0x111ae3e5bc816a5e63c2da97d0aa3886519e0cd5e4b046659fa35796bd11542a",
         "0x9770fa9c725cbd97eb50b2be5f7416efdfd1f1554beb0750d4dae4c64e860da3",
