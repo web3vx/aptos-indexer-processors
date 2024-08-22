@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{DefaultProcessingResult, ProcessorName, ProcessorTrait};
+use crate::db::common::models::coin_models::coin_activities::CoinActivity;
+use crate::db::common::models::coin_models::coin_balances::CoinBalance;
+use crate::db::common::models::coin_models::coin_infos::CoinInfo;
 use crate::{
     db::common::models::{
         coin_models::coin_supply::CoinSupply,
@@ -40,6 +43,8 @@ use diesel::{
     query_builder::QueryFragment,
     ExpressionMethods,
 };
+use field_count::FieldCount;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use tracing::error;
 
@@ -88,6 +93,9 @@ async fn insert_to_db(
         &[CurrentUnifiedFungibleAssetBalance],
     ),
     coin_supply: &[CoinSupply],
+    coin_activities: &[CoinActivity],
+    coin_infos: &[CoinInfo],
+    coin_balances: &[CoinBalance],
     per_table_chunk_sizes: &AHashMap<String, usize>,
 ) -> Result<(), diesel::result::Error> {
     tracing::trace!(
@@ -151,6 +159,28 @@ async fn insert_to_db(
             per_table_chunk_sizes,
         ),
     );
+    execute_in_chunks(
+        conn.clone(),
+        insert_coin_activities_query,
+        coin_activities,
+        CoinActivity::field_count(),
+    )
+    .await?;
+    execute_in_chunks(
+        conn.clone(),
+        insert_coin_infos_query,
+        coin_infos,
+        CoinInfo::field_count(),
+    )
+    .await?;
+    execute_in_chunks(
+        conn.clone(),
+        insert_coin_balances_query,
+        coin_balances,
+        CoinBalance::field_count(),
+    )
+    .await?;
+
     let cs = execute_in_chunks(
         conn,
         insert_coin_supply_query,
@@ -166,6 +196,77 @@ async fn insert_to_db(
     }
 
     Ok(())
+}
+
+fn insert_coin_activities_query(
+    items_to_insert: Vec<CoinActivity>,
+) -> (
+    impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send,
+    Option<&'static str>,
+) {
+    use schema::coin_activities::dsl::*;
+
+    (
+        diesel::insert_into(schema::coin_activities::table)
+            .values(items_to_insert)
+            .on_conflict((
+                transaction_version,
+                event_account_address,
+                event_creation_number,
+                event_sequence_number,
+            ))
+            .do_update()
+            .set((
+                entry_function_id_str.eq(excluded(entry_function_id_str)),
+                inserted_at.eq(excluded(inserted_at)),
+            )),
+        None,
+    )
+}
+
+fn insert_coin_infos_query(
+    items_to_insert: Vec<CoinInfo>,
+) -> (
+    impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send,
+    Option<&'static str>,
+) {
+    use schema::coin_infos::dsl::*;
+
+    (
+        diesel::insert_into(schema::coin_infos::table)
+            .values(items_to_insert)
+            .on_conflict(coin_type_hash)
+            .do_update()
+            .set((
+                transaction_version_created.eq(excluded(transaction_version_created)),
+                creator_address.eq(excluded(creator_address)),
+                name.eq(excluded(name)),
+                symbol.eq(excluded(symbol)),
+                decimals.eq(excluded(decimals)),
+                transaction_created_timestamp.eq(excluded(transaction_created_timestamp)),
+                supply_aggregator_table_handle.eq(excluded(supply_aggregator_table_handle)),
+                supply_aggregator_table_key.eq(excluded(supply_aggregator_table_key)),
+                inserted_at.eq(excluded(inserted_at)),
+            )),
+        Some(" WHERE coin_infos.transaction_version_created >= EXCLUDED.transaction_version_created "),
+    )
+}
+
+fn insert_coin_balances_query(
+    items_to_insert: Vec<CoinBalance>,
+) -> (
+    impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send,
+    Option<&'static str>,
+) {
+    use schema::coin_balances::dsl::*;
+
+    (
+        diesel::insert_into(schema::coin_balances::table)
+            .values(items_to_insert)
+            .on_conflict((transaction_version, owner_address, coin_type_hash))
+            .do_nothing(),
+        None,
+    )
 }
 
 fn insert_fungible_asset_activities_query(
@@ -389,6 +490,23 @@ impl ProcessorTrait for FungibleAssetProcessor {
             current_fungible_asset_balances.clear();
         }
 
+        let mut all_coin_activities = vec![];
+        let mut all_coin_balances = vec![];
+        let mut all_coin_infos: HashMap<String, CoinInfo> = HashMap::new();
+
+        for txn in &transactions {
+            let (mut coin_activities, mut coin_balances, coin_infos, ..) =
+                CoinActivity::from_transaction(txn);
+            all_coin_activities.append(&mut coin_activities);
+            all_coin_balances.append(&mut coin_balances);
+            // For coin infos, we only want to keep the first version, so insert only if key is not present already
+            for (key, value) in coin_infos {
+                all_coin_infos.entry(key).or_insert(value);
+            }
+        }
+        let mut all_coin_infos = all_coin_infos.into_values().collect::<Vec<CoinInfo>>();
+        all_coin_infos.sort_by(|a, b| a.coin_type.cmp(&b.coin_type));
+
         let tx_result = insert_to_db(
             self.get_pool(),
             self.name(),
@@ -400,6 +518,9 @@ impl ProcessorTrait for FungibleAssetProcessor {
             &current_fungible_asset_balances,
             (&coin_balance, &fa_balance),
             &coin_supply,
+            &all_coin_activities,
+            &all_coin_infos,
+            &all_coin_balances,
             &self.per_table_chunk_sizes,
         )
         .await;
