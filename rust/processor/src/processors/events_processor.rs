@@ -176,7 +176,6 @@ impl ProcessorTrait for EventsProcessor {
                     continue;
                 },
             };
-
             let default = vec![];
             let raw_events = match txn_data {
                 TxnData::BlockMetadata(tx_inner) => &tx_inner.events,
@@ -185,16 +184,20 @@ impl ProcessorTrait for EventsProcessor {
                 TxnData::Validator(tx_inner) => &tx_inner.events,
                 _ => &default,
             };
+
             let request_default = None;
             let tnx_user_request = match txn_data {
                 TxnData::User(tx_inner) => &tx_inner.request,
                 _ => &request_default,
             };
+
             //  If request is None, it means that the transaction is not a user transaction, skip
-            if tnx_user_request.is_none() {
-                continue;
-            }
-            let inserted_at = txn.timestamp.clone();
+            // if tnx_user_request.is_none() {
+            //     continue;
+            // }
+            // tracing::info!("tnx_user_request : {:?}", &tnx_user_request.is_none());
+
+            let inserted_at: Option<Timestamp> = txn.timestamp.clone();
 
             let txn_events = EventModel::from_events(
                 raw_events,
@@ -215,7 +218,6 @@ impl ProcessorTrait for EventsProcessor {
 
         let processing_duration_in_secs = processing_start.elapsed().as_secs_f64();
         let db_insertion_start = std::time::Instant::now();
-
         let tx_result = insert_to_db(
             self.get_pool(),
             self.name(),

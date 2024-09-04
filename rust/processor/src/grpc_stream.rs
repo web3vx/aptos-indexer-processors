@@ -92,11 +92,11 @@ pub async fn get_stream(
     let channel = tonic::transport::Channel::from_shared(
         indexer_grpc_data_service_address.to_string(),
     )
-    .expect(
-        "[Parser] Failed to build GRPC channel, perhaps because the data service URL is invalid",
-    )
-    .http2_keep_alive_interval(indexer_grpc_http2_ping_interval)
-    .keep_alive_timeout(indexer_grpc_http2_ping_timeout);
+        .expect(
+            "[Parser] Failed to build GRPC channel, perhaps because the data service URL is invalid",
+        )
+        .http2_keep_alive_interval(indexer_grpc_http2_ping_interval)
+        .keep_alive_timeout(indexer_grpc_http2_ping_timeout);
 
     // If the scheme is https, add a TLS config.
     let channel = if indexer_grpc_data_service_address.scheme() == "https" {
@@ -125,7 +125,7 @@ pub async fn get_stream(
             indexer_grpc_reconnection_timeout_secs,
             RawDataClient::connect(channel.clone()),
         )
-        .await;
+            .await;
         match res {
             Ok(client) => break Ok(client),
             Err(e) => {
@@ -146,7 +146,7 @@ pub async fn get_stream(
             },
         }
     }
-    .expect("[Parser] Timeout connecting to GRPC server");
+        .expect("[Parser] Timeout connecting to GRPC server");
 
     let mut rpc_client = match connect_res {
         Ok(client) => client
@@ -192,7 +192,7 @@ pub async fn get_stream(
             );
             rpc_client.get_transactions(request).await
         })
-        .await;
+            .await;
         match timeout_res {
             Ok(client) => break Ok(client),
             Err(e) => {
@@ -213,7 +213,7 @@ pub async fn get_stream(
             },
         }
     }
-    .expect("[Parser] Timed out making grpc request after max retries.");
+        .expect("[Parser] Timed out making grpc request after max retries.");
 
     match stream_res {
         Ok(stream) => stream,
@@ -256,7 +256,7 @@ pub async fn get_chain_id(
         auth_token.clone(),
         processor_name.to_string(),
     )
-    .await;
+        .await;
     let connection_id = match response.metadata().get(GRPC_CONNECTION_ID) {
         Some(connection_id) => connection_id.to_str().unwrap().to_string(),
         None => "".to_string(),
@@ -335,7 +335,7 @@ pub async fn create_fetcher_loop(
         auth_token.clone(),
         processor_name.to_string(),
     )
-    .await;
+        .await;
     let mut connection_id = match response.metadata().get(GRPC_CONNECTION_ID) {
         Some(connection_id) => connection_id.to_str().unwrap().to_string(),
         None => "".to_string(),
@@ -363,7 +363,7 @@ pub async fn create_fetcher_loop(
             indexer_grpc_response_item_timeout_secs,
             resp_stream.next(),
         )
-        .await
+            .await
         {
             // Received datastream response
             Ok(response) => {
@@ -673,7 +673,7 @@ pub async fn create_fetcher_loop(
                 auth_token.clone(),
                 processor_name.to_string(),
             )
-            .await;
+                .await;
             connection_id = match response.metadata().get(GRPC_CONNECTION_ID) {
                 Some(connection_id) => connection_id.to_str().unwrap().to_string(),
                 None => "".to_string(),
