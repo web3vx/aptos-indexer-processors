@@ -78,6 +78,7 @@ static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
         "0xccd1a84ccea93531d7f165b90134aa0415feb30e8757ab1632dac68c0055f5c2",
         // "0xf9254492a5bb97685bb1789834668f3f8f391336b11c063b74ac6f83c37f6ecf::tapos_game_2::SetTaskPoints",
         // "0xf9254492a5bb97685bb1789834668f3f8f391336b11c063b74ac6f83c37f6ecf::tapos_game_2::AddEquipment",
+        "0x68476f9d437e3f32fd262ba898b5e3ee0a23a1d586a6cf29a28add35f253f6f7",
     ]
 });
 pub struct EventsProcessor {
