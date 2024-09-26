@@ -6,7 +6,7 @@ on:
       - "fa_mainnet"
 jobs:
   deploy:
-    runs-on: coin_mainnet
+    runs-on: fa_mainnet
     steps:
       - name: Checkout
         uses: actions/checkout@v3
