@@ -1,4 +1,5 @@
 use move_core_types::value::{MoveStructLayout, MoveTypeLayout, MoveValue};
+use serde_json::{Number, Value};
 use std::str::from_utf8;
 
 pub fn map_string_to_move_type(type_string: &str) -> Option<MoveTypeLayout> {
@@ -36,33 +37,29 @@ fn parse_vector(type_string: &str) -> Option<MoveTypeLayout> {
     }
 }
 
-pub fn parse_nested_move_values(input: &MoveValue) -> String {
+pub fn parse_nested_move_values(input: &MoveValue) -> Value {
     match input {
         MoveValue::Vector(vec) => {
             if vec.is_empty() {
-                return String::from("[]");
+                return serde_json::Value::Array(vec![]);
             }
-            if let MoveValue::U8(_) = vec[0] {
-                return format!("\"{}\"", parse_string_vectors(&input.to_string()));
-            }
-            let mut result = String::from("[");
+            let mut result: Vec<Value> = Vec::new();
             for value in vec {
-                result.push_str(&parse_nested_move_values(value));
-                result.push_str(", ");
+                result.push(parse_nested_move_values(value));
             }
-            result.pop();
-            result.pop();
-            result.push(']');
-            result
+
+            Value::Array(result)
         },
-        MoveValue::U8(byte) => byte.to_string(),
-        MoveValue::U64(num) => num.to_string(),
-        MoveValue::U128(num) => num.to_string(),
-        MoveValue::U256(num) => num.to_string(),
-        MoveValue::Bool(boolean) => boolean.to_string(),
-        MoveValue::Address(address) => format!("\"{}\"", address.to_string()),
-        MoveValue::Signer(signer) => format!("\"{}\"", signer.to_string()),
-        _ => String::from("Unsupported type"),
+        MoveValue::U8(num) => serde_json::Value::Number(Number::from(*num)),
+        MoveValue::U16(num) => serde_json::Value::Number(Number::from(*num)),
+        MoveValue::U32(num) => serde_json::Value::Number(Number::from(*num)),
+        MoveValue::U64(num) => serde_json::Value::Number(Number::from(*num)),
+        MoveValue::U128(num) => serde_json::Value::Number(Number::from(*num as u64)),
+        MoveValue::U256(num) => serde_json::Value::Number(Number::from(num.unchecked_as_u64())),
+        MoveValue::Bool(boolean) => serde_json::Value::Bool(*boolean),
+        MoveValue::Address(address) => serde_json::Value::String(address.to_string()),
+        MoveValue::Signer(signer) => serde_json::Value::String(signer.to_string()),
+        _ => serde_json::Value::Null,
     }
 }
 

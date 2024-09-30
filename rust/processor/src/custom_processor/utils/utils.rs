@@ -79,16 +79,20 @@ pub fn parse_function_args(
         .enumerate()
         .map(|(index, arg)| {
             let type_layout = map_string_to_move_type(function_params[index].as_str().unwrap());
+            eprintln!("type_layout: {:?}", type_layout);
             if type_layout.is_none() {
                 return Ok(Value::Null);
             };
             let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
-            let json_vec = parse_nested_move_values(&move_value);
-            let json_value = serde_json::from_str(&json_vec);
-            if json_value.is_err() {
-                return Ok(Value::Null);
-            }
-            Ok(json_value.unwrap())
+            eprintln!("move_value: {:?}", move_value);
+            let json_response = parse_nested_move_values(&move_value);
+            // eprintln!("json_vec: {:?}", json_vec);
+            // let json_value = serde_json::from_str(&json_vec);
+            // if json_value.is_err() {
+            //     eprintln!("json_value: {:?}", json_value.err().unwrap());
+            //     return Ok(Value::Null);
+            // }
+            Ok(json_response)
         })
         .collect()
 }
