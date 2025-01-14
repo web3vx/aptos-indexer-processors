@@ -1,0 +1,20 @@
+# docker build . -t indexer-processor
+# docker run -it --network host --mount type=bind,source=/tmp/config.yaml,target=/config.yaml indexer-processor -c /config.yaml
+name: fa_mainnet
+version: '3.8'
+services:
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fa_mainnet
+    container_name: fa_mainnet
+    volumes:
+      - ./config.yaml:/config.yaml
+    command: -c ./config.yaml
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
