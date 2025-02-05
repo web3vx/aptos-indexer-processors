@@ -3,10 +3,10 @@ run-name: ${{ github.actor }} is deploying Multisig Testnet to Indexer VM
 on:
   push:
     branches:
-      - "features/implement-multisig-transaction-testnet"
+      - "feat/multisig-testnet"
 jobs:
   deploy:
-    runs-on: multisig-testnet # 2658037
+    runs-on: multisig-testnet
     steps:
       - name: Checkout
         uses: actions/checkout@v3
