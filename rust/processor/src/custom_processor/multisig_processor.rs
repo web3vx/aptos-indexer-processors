@@ -670,7 +670,7 @@ async fn handle_create_transaction_event(
                 json_payload = process_entry_function(&multisig_transaction_payload)
                     .await
                     .unwrap_or_else(|err| -> Value {
-                        println!("Failed to process entry function. {:?}", err);
+                        tracing::warn!("Failed to process entry function. {:?}", err);
                         Value::Null
                     });
             },

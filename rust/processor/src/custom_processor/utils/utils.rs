@@ -83,9 +83,12 @@ pub fn parse_function_args(
                 return Ok(Value::Null);
             };
             let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
+            println!("move_value deserialized");
             let json_vec = parse_nested_move_values(&move_value);
+            println!("json_vec: {}", json_vec);
             let json_value = serde_json::from_str(&json_vec);
             if json_value.is_err() {
+                tracing::warn!("Error parsing JSON: {:?}", json_value.err());
                 return Ok(Value::Null);
             }
             Ok(json_value.unwrap())
