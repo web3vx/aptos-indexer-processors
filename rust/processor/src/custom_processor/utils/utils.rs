@@ -1,4 +1,5 @@
 use bcs::from_bytes;
+use regex::Regex;
 use serde_json::Value;
 
 use move_core_types::identifier::Identifier;
@@ -50,10 +51,28 @@ async fn fetch_function_details(module: &ModuleId) -> anyhow::Result<Value> {
         module.address, module.name
     );
     let response = reqwest::get(&request_url).await?;
-    response
+    let result = response
         .json::<Value>()
         .await
-        .map_err(|error| anyhow::anyhow!("Error: {:?}", error))
+        .map_err(|error| anyhow::anyhow!("Error: {:?}", error));
+    if result.is_err() {
+        return result;
+    }
+    // If the module is not found, try fetching from testnet
+    let error_regex = Regex::new("module_not_found").unwrap();
+    if error_regex.is_match(&result.as_ref().unwrap().to_string()) {
+        let request_url = format!(
+            "https://fullnode.testnet.aptoslabs.com/v1/accounts/{}/module/{}",
+            module.address, module.name
+        );
+        let response = reqwest::get(&request_url).await?;
+        let result = response
+            .json::<Value>()
+            .await
+            .map_err(|error| anyhow::anyhow!("Error: {:?}", error));
+        return result;
+    }
+    result
 }
 
 pub fn parse_function_args(
@@ -83,9 +102,7 @@ pub fn parse_function_args(
                 return Ok(Value::Null);
             };
             let move_value = MoveValue::simple_deserialize(arg, &type_layout.unwrap())?;
-            println!("move_value deserialized");
             let json_vec = parse_nested_move_values(&move_value);
-            println!("json_vec: {}", json_vec);
             let json_value = serde_json::from_str(&json_vec);
             if json_value.is_err() {
                 tracing::warn!("Error parsing JSON: {:?}", json_value.err());
