@@ -56,6 +56,8 @@ pub fn parse_nested_move_values(input: &MoveValue) -> String {
             result
         },
         MoveValue::U8(byte) => byte.to_string(),
+        MoveValue::U16(num) => num.to_string(),
+        MoveValue::U32(num) => num.to_string(),
         MoveValue::U64(num) => num.to_string(),
         MoveValue::U128(num) => num.to_string(),
         MoveValue::U256(num) => num.to_string(),

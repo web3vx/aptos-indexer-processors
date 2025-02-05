@@ -46,7 +46,7 @@ pub async fn process_entry_function(
 
 async fn fetch_function_details(module: &ModuleId) -> anyhow::Result<Value> {
     let request_url = format!(
-        "https://fullnode.testnet.aptoslabs.com/v1/accounts/{}/module/{}",
+        "https://fullnode.mainnet.aptoslabs.com/v1/accounts/{}/module/{}",
         module.address, module.name
     );
     let response = reqwest::get(&request_url).await?;
