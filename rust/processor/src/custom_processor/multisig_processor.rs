@@ -5,19 +5,35 @@ use std::fmt::Debug;
 
 use ahash::AHashMap;
 use anyhow::bail;
-use aptos_protos::transaction::v1::{Event, Transaction, transaction::TxnData, WriteResource};
 use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::{transaction::TxnData, Event, Transaction, WriteResource};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
-    BoolExpressionMethods,
-    ExpressionMethods,
-    pg::{Pg, upsert::excluded}, query_builder::QueryFragment, QueryDsl,
+    pg::{upsert::excluded, Pg},
+    query_builder::QueryFragment,
+    BoolExpressionMethods, ExpressionMethods, QueryDsl,
 };
 use serde_json::{to_string, Value};
 use tracing::error;
 use tracing::log::info;
 
+use crate::custom_processor::utils::utils::{
+    decode_event_payload, parse_payload, process_entry_function,
+};
+use crate::custom_processor::{CustomProcessorName, CustomProcessorTrait};
+use crate::models::multisig_transaction_models::multisig_transaction::{
+    MultisigTransaction, TransactionStatus,
+};
+use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
+use crate::processors::ProcessingResult;
+use crate::schema::multisig_transactions::{
+    executed_at, executor, payload, sequence_number, status, wallet_address,
+};
+use crate::schema::owners_wallets::owner_address;
+use crate::schema::{ledger_infos, multisig_transactions};
+use crate::utils::database::execute_with_better_error;
+use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 use crate::{
     models::multisig_owner_models::multisig_owner::MultisigOwner,
     models::multisig_owner_wallet_models::multisig_owner_wallet::OwnersWallet,
@@ -28,22 +44,6 @@ use crate::{
         database::{execute_in_chunks, get_config_table_chunk_size, PgDbPool},
     },
 };
-use crate::custom_processor::{CustomProcessorName, CustomProcessorTrait};
-use crate::custom_processor::utils::utils::{
-    decode_event_payload, parse_payload, process_entry_function,
-};
-use crate::models::multisig_transaction_models::multisig_transaction::{
-    MultisigTransaction, TransactionStatus,
-};
-use crate::models::multisig_voting_transaction_models::multisig_voting_transaction::MultisigVotingTransaction;
-use crate::processors::ProcessingResult;
-use crate::schema::{ledger_infos, multisig_transactions};
-use crate::schema::multisig_transactions::{
-    executed_at, executor, payload, sequence_number, status, wallet_address,
-};
-use crate::schema::owners_wallets::owner_address;
-use crate::utils::database::execute_with_better_error;
-use crate::utils::util::{extract_multisig_wallet_data_from_write_resource, standardize_address};
 
 pub struct MultisigProcessor {
     connection_pool: PgDbPool,
@@ -404,7 +404,8 @@ impl CustomProcessorTrait for MultisigProcessor {
                                 txn.version
                             );
                             let info = txn.clone().info.unwrap();
-                            let hash = standardize_address(hex::encode(info.hash.as_slice()).as_str());
+                            let hash =
+                                standardize_address(hex::encode(info.hash.as_slice()).as_str());
                             handle_create_transaction_event(
                                 self,
                                 event,
@@ -668,7 +669,10 @@ async fn handle_create_transaction_event(
             Ok(multisig_transaction_payload) => {
                 json_payload = process_entry_function(&multisig_transaction_payload)
                     .await
-                    .unwrap_or_else(|_| Value::Null);
+                    .unwrap_or_else(|err| -> Value {
+                        tracing::warn!("Failed to process entry function. {:?}", err);
+                        Value::Null
+                    });
             },
             Err(e) => {
                 tracing::warn!("Error parsing payload: {:?}", e);
