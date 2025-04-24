@@ -1,0 +1,22 @@
+name: Deploy FA Mainnet
+run-name: ${{ github.actor }} is deploying FA Mainnet
+on:
+  push:
+    branches:
+      - "fa_mainnet"
+jobs:
+  deploy:
+    runs-on: fa_mainnet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - run: |
+          cd rust
+          docker compose --project-name fa_mainnet -f docker-compose-fa-mainnet.yaml down || true
+          docker rmi fa_mainnet || true
+          docker builder prune --all -f
+          echo "${{ secrets.ENV_FA_MAINNET }}" >> config.yaml
+          docker compose --project-name fa_mainnet -f docker-compose-fa-mainnet.yaml up -d
+          # Remove the last line from the config.yaml file (start_ver)
+          sed -i '$ d' config.yaml
+          docker image prune -f

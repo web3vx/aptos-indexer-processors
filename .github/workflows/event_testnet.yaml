@@ -1,0 +1,22 @@
+name: Deploy Event Testnet
+run-name: ${{ github.actor }} is deploying Event Testnet
+on:
+  push:
+    branches:
+      - "event_testnet"
+jobs:
+  deploy:
+    runs-on: event_testnet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - run: |
+          cd rust
+          docker compose --project-name event_testnet -f docker-compose-event-testnet.yaml down || true
+          docker rmi event_testnet || true
+          docker builder prune --all -f
+          echo "${{ secrets.ENV_EVENT_TESTNET }}" >> config.yaml
+          docker compose --project-name event_testnet -f docker-compose-event-testnet.yaml up -d
+          # Remove the last line from the config.yaml file (start_ver)
+          sed -i '$ d' config.yaml
+          docker image prune -f
