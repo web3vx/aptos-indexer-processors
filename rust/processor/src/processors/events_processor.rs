@@ -36,6 +36,7 @@ static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
         "0x1::delegation_pool::UnlockStakeEvent",
         "0x1::delegation_pool::WithdrawStakeEvent",
         "0xaca57e97ff9550143a6a32c4c7c6cb687936ba9039b58f0a584168a14b32dca8",
+        "0x624d039954fe128cd4654596ed2f4ecc3eb93c70c19eb73019fd701ef3185f7c",
     ]
 });
 
