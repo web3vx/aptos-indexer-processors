@@ -27,6 +27,8 @@ use tracing::error;
 
 static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
     vec![
+        "0x1::voting",
+        "0x1::aptos_governance",
         "0x1::multisig_account",
         "0x1::staking_contract::CreateStakingContractEvent",
         "0x1::staking_contract::RequestCommissionEvent",

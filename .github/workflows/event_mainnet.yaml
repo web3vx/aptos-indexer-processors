@@ -18,5 +18,5 @@ jobs:
           echo "${{ secrets.ENV_EVENT_MAINNET }}" >> config.yaml
           docker compose --project-name event_mainnet -f docker-compose-event-mainnet.yaml up -d
           # Remove the last line from the config.yaml file (start_ver)
-          sed -i '$ d' config.yaml
-          docker image prune -f
+          # sed -i '$ d' config.yaml
+          # docker image prune -f
