@@ -59,6 +59,7 @@ static REQUIRED_EVENTS: Lazy<Vec<&str>> = Lazy::new(|| {
         "0x68476f9d437e3f32fd262ba898b5e3ee0a23a1d586a6cf29a28add35f253f6f7",
         "0x1b6bbbc29f30a24827aa13ea0d637df71f8e33c551473dd06e3cea28ae045982",
         "0x1f9808ae34f6ed0493b936eedb71d1f1b1a97fc65808e8b80b0b2acc768e8548",
+        "0x9e633cfb1c22aa969e8321e483a859837a09f87e1eebaf59206ccd3bcf191cdc",
     ]
 });
 
